@@ -58,9 +58,15 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   no deja leerla, en la caché del navegador), así se ve sin internet. En el «⋯» de cada libro se corrigen el título y el
   autor, se vuelve a buscar y se elige: la primera página del PDF, otra de internet o una «de tela» hecha por la app.
   Para buscarlas se envían a esos catálogos solo el título y el autor del libro; se puede apagar en la misma ficha.
-- **Zoom** (`src/hoja/gestos.ts`, `src/hoja/zoom.ts`): pellizco con dos dedos, un dedo mueve la hoja ampliada, doble
-  toque acerca o vuelve al tamaño normal. En la PC, Ctrl + rueda (hacia el puntero), la rueda sola mueve, y Ctrl + / − / 0.
-  Al quedarse quieto, la parte visible se vuelve a dibujar nítida a la nueva escala.
+- **Zoom** (`src/hoja/gestos.ts`, `src/hoja/zoom.ts`): pellizco con dos dedos; con zoom, arriba y abajo mueve la
+  página (con impulso) y a los lados la pasa cuando ya se ve el borde del texto (si no, primero lo muestra). El zoom se
+  mantiene al pasar: la página nueva empieza arriba (o abajo, al volver). **Doble toque**: el texto a todo el ancho
+  (`src/pdf/contenido.ts` mide dónde está lo impreso en cada página, sin tocar el PDF) o vuelve a la página entera.
+  **Celular de lado**: la página va a todo el ancho y se lee deslizando. En la PC, Ctrl + rueda (hacia el puntero),
+  la rueda sola mueve, y Ctrl + / − / 0. Al quedarse quieto, lo visible se vuelve a dibujar nítido.
+- **Sonido de fondo** (`src/sonido/ambiente.ts`): en «Papel y sonido», para relajarse (playa, bosque y fogata, lluvia)
+  o según el libro (terror, suspenso, drama, acción). Se recuerda en cada libro y tiene su volumen. Cada ambiente son
+  dos grabaciones de 30 s unidas con fundidos en un bucle de un minuto; se descargan la primera vez que se usan.
 - **Doble página** en la PC o la tablet en horizontal: el libro abierto sobre la mesa; se toma la esquina con el mouse
   (o ← →); el reverso de la hoja es la página siguiente de verdad. Barra de arriba con título y capítulo, barra de abajo
   para saltar de página y panel lateral con las frases del libro.
@@ -100,7 +106,8 @@ La maqueta es `diseno/propuesta-visual.html` (ábrela en el navegador). Para vol
 - [PDF.js](https://github.com/mozilla/pdf.js) (`pdfjs-dist`): Apache-2.0. Sus recursos (mapas de caracteres,
   fuentes estándar, módulos wasm) se publican en `pdfjs/` con sus licencias.
 - React, Zustand e idb: licencia MIT.
-- Sonidos (`public/sonidos/`): generados con ElevenLabs para este proyecto; ver `public/sonidos/LICENCIA.md`.
+- Sonidos (`public/sonidos/`) y sonidos de fondo (`public/ambiente/`): generados con ElevenLabs para este proyecto;
+  ver `public/sonidos/LICENCIA.md` y `public/ambiente/LICENCIA.md`.
 - Libro de muestra (`public/muestra/`): texto de Cervantes (dominio público) compuesto con EB Garamond (OFL 1.1).
 - Íconos de la app (`public/icono.svg`, `public/iconos/`): propios.
 - Portadas de internet: se muestran desde [Open Library](https://openlibrary.org/dev/docs/api/covers) y

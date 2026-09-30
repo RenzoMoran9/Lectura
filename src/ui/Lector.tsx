@@ -14,13 +14,14 @@ import type { Frase } from '../frases/modelo';
 import { leerTextoPagina, type TextoPagina } from '../frases/texto';
 import type { Sentido } from '../hoja/geometria';
 import { Gestos } from '../hoja/gestos';
-import { densidad, disponer, pliego, type Caja, type Disposicion } from '../hoja/maqueta';
+import { densidad, disponer, esCelular, pliego, type Caja, type Disposicion } from '../hoja/maqueta';
 import { MotorHoja, type Escena } from '../hoja/motor';
 import { Pasador, type Pase } from '../hoja/pasador';
-import { acercarEn, aLienzo, conZoom, limitar, SIN_ZOOM, type Zoom } from '../hoja/zoom';
+import { acercarEn, aLienzo, conZoom, desplazable, encuadrar, limitar, SIN_ZOOM, zoomAlTexto, type Encuadre, type Zoom } from '../hoja/zoom';
 import { capituloDe, leerCapitulos, type Capitulo } from '../pdf/indice';
 import { abrirPdf, bytesLeidos, cerrarPdf, type DocumentoPdf } from '../pdf/pdf';
 import { Paginas } from '../pdf/paginas';
+import { ambiente } from '../sonido/ambiente';
 import { sonido } from '../sonido/sonido';
 import { AvisoBreve, AvisoModo, type Mensaje } from './Avisos';
 import { Icono } from './Icono';
@@ -38,6 +39,13 @@ const miles = (n: number) => n.toLocaleString('es');
 const LIMITE_LEIDO = (import.meta.env.DEV && (globalThis as { __limiteLeido?: number }).__limiteLeido) || 160e6;
 
 const PANEL = 340; // ancho del panel de Mis frases
+
+/**
+ * Cómo se ve la página: entera («pagina»), con el texto a todo el ancho («texto», doble toque) o
+ * con el zoom que dejó el pellizco («libre»). Se mantiene al pasar las hojas.
+ */
+type Ajuste = 'pagina' | 'texto' | 'libre';
+type Donde = 'arriba' | 'abajo' | { px: number; py: number };
 const BARRA_ARRIBA = 52;
 const BARRA_ABAJO = 56;
 
@@ -67,6 +75,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const [mensaje, setMensaje] = useState<Mensaje | null>(null);
   const [hayZoom, setHayZoom] = useState(false);
   const [capitulos, setCapitulos] = useState<Capitulo[]>([]);
+  const [ajuste, setAjuste] = useState<Ajuste>(() => (useAjustes.getState().ajusteTexto ? 'texto' : 'pagina'));
   const cerrarMensaje = useCallback(() => setMensaje(null), []);
 
   const motor = useRef<MotorHoja | null>(null);
@@ -77,6 +86,9 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const paginaRef = useRef(0);
   const dispRef = useRef<Disposicion | null>(null);
   const zoomRef = useRef<Zoom>(SIN_ZOOM);
+  const ajusteRef = useRef<Ajuste>(ajuste);
+  /** La página aún no estaba medida al encuadrarla: se encuadra de nuevo cuando llegue. */
+  const encuadrePendiente = useRef<'arriba' | 'abajo' | null>(null);
   const animZoom = useRef(0);
   const detalleQuieto = useRef(0);
   const textos = useRef(new Map<number, TextoPagina | 'leyendo'>());
@@ -160,6 +172,78 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   };
 
   // ---------- Zoom ----------
+  const vistaTam = () => {
+    const el = contenedor.current;
+    return el && el.clientWidth ? { w: el.clientWidth, h: el.clientHeight } : null;
+  };
+
+  /** ¿La vista se puede mover? (con zoom, o de lado, con la hoja más alta que la pantalla). */
+  const sePuedeMover = () => {
+    const d = dispRef.current;
+    const v = vistaTam();
+    return !!d && !!v && desplazable(zoomRef.current, d.libro, v);
+  };
+
+  /** Dónde está el texto de la página (px CSS del lienzo) y qué ancho tiene el texto de este libro. */
+  const encuadreDe = (i: number): Encuadre | null => {
+    const pags = paginas.current;
+    const d = dispRef.current;
+    if (!pags || !d) return null;
+    const r = pags.rectPagina(i) ?? d.caja;
+    const c = pags.contenido(i);
+    const k = c ?? { x0: 0, y0: 0, x1: 1, y1: 1 };
+    const texto = { x: d.hoja.x + r.x + k.x0 * r.w, y: d.hoja.y + r.y + k.y0 * r.h, w: (k.x1 - k.x0) * r.w, h: (k.y1 - k.y0) * r.h };
+    // El ancho típico del texto del libro (sin las páginas casi vacías, como las de un título):
+    // así el tamaño de la letra no salta de una página a otra.
+    const anchos = pags
+      .contenidosMedidos()
+      .map((m) => m.x1 - m.x0)
+      .filter((a) => a > 0.35)
+      .sort((a, b) => a - b);
+    const tipico = anchos.length ? anchos[Math.floor(anchos.length / 2)] * r.w : 0;
+    const s = margenesSeguros();
+    return {
+      texto,
+      ancho: Math.max(c ? texto.w : 0, tipico) || texto.w,
+      margen: { lado: 8, arriba: s.arriba + 10, abajo: s.abajo + 10 },
+    };
+  };
+
+  /** A dónde va la vista para la página actual, según el ajuste. */
+  const objetivo = (donde: Donde): Zoom | null => {
+    const d = dispRef.current;
+    const v = vistaTam();
+    if (!d || !v) return null;
+    const doble = d.modo === 'doble';
+    const e = doble ? null : encuadreDe(paginaRef.current);
+    const a = ajusteRef.current;
+    let z: Zoom;
+    if (a === 'texto' && e) {
+      const zz = zoomAlTexto(e, v);
+      const punto = typeof donde === 'object' ? { py: donde.py, y: aLienzo(zoomRef.current, donde.px, donde.py).y } : donde;
+      z = encuadrar(zz, e, v, punto);
+    } else {
+      const base = a === 'libre' ? zoomRef.current : SIN_ZOOM;
+      if (typeof donde === 'object') z = acercarEn(zoomRef.current, base.z, donde.px, donde.py);
+      else if (!e) z = { ...base, y: donde === 'arriba' ? 1e7 : -1e7 };
+      else {
+        // Con zoom libre, la página nueva empieza donde empiezan los renglones (y al volver, donde terminan).
+        const cabe = base.z * e.texto.w <= v.w - 2 * e.margen.lado;
+        const x = cabe
+          ? v.w / 2 - base.z * (e.texto.x + e.texto.w / 2)
+          : donde === 'arriba'
+            ? e.margen.lado - base.z * e.texto.x
+            : v.w - e.margen.lado - base.z * (e.texto.x + e.texto.w);
+        z = {
+          z: base.z,
+          x: a === 'libre' ? x : base.x,
+          y: donde === 'arriba' ? e.margen.arriba - base.z * e.texto.y : v.h - e.margen.abajo - base.z * (e.texto.y + e.texto.h),
+        };
+      }
+    }
+    return limitar(z, d.libro, v);
+  };
+
   const aplicarZoom = useCallback((z: Zoom) => {
     zoomRef.current = z;
     motor.current?.ponerZoom(z.z, z.x, z.y);
@@ -172,6 +256,12 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     setHayZoom(conZoom(z));
   }, []);
 
+  /** Las páginas se dibujan a la medida de la pantalla; con zoom (o de lado) hace falta más detalle. */
+  const necesitaDetalle = (z: Zoom) => {
+    const tam = paginas.current?.lienzoTam;
+    return !!tam && tam.dpr < Math.min(window.devicePixelRatio || 1, 2.5) * z.z * 0.95;
+  };
+
   const pintarDetalle = useCallback(() => {
     const m = motor.current;
     const pags = paginas.current;
@@ -179,12 +269,14 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     const el = contenedor.current;
     if (!m || !pags || !d || !el) return;
     const z = zoomRef.current;
-    if (!conZoom(z)) return m.quitarDetalles();
+    if (!necesitaDetalle(z)) return m.quitarDetalles();
     const tam = pags.lienzoTam;
     if (!tam) return;
     const vw = el.clientWidth;
     const vh = el.clientHeight;
     const k = Math.min(window.devicePixelRatio || 1, 2.5) * z.z;
+    // Lo visible y un poco más arriba y abajo: al deslizar un poco, sigue nítido.
+    const extra = (0.35 * vh) / z.z;
     for (const i of visibles()) {
       const izquierda = esDoble() && i === pliego(paginaRef.current).izquierda;
       const r = izquierda ? { ...d.hoja, x: d.hoja.x - d.hoja.w } : d.hoja;
@@ -192,9 +284,9 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       const a = aLienzo(z, 0, 0);
       const b = aLienzo(z, vw, vh);
       const x0 = Math.max(r.x, a.x);
-      const y0 = Math.max(r.y, a.y);
+      const y0 = Math.max(r.y, a.y - extra);
       const x1 = Math.min(r.x + r.w, b.x);
-      const y1 = Math.min(r.y + r.h, b.y);
+      const y1 = Math.min(r.y + r.h, b.y + extra);
       if (x1 - x0 < 2 || y1 - y0 < 2) {
         m.ponerDetalle(i, null);
         continue;
@@ -202,7 +294,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       const region = { x: x0 - r.x, y: y0 - r.y, w: x1 - x0, h: y1 - y0 };
       const kk = Math.min(k, Math.sqrt(9e6 / (region.w * region.h)));
       void pags.dibujarDetalle(i, region, kk).then((res) => {
-        if (res && conZoom(zoomRef.current)) m.ponerDetalle(i, res.lienzo, res.rect);
+        if (res && necesitaDetalle(zoomRef.current)) m.ponerDetalle(i, res.lienzo, res.rect);
       });
     }
   }, []);
@@ -239,6 +331,33 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     aplicarZoom(SIN_ZOOM);
     motor.current?.quitarDetalles();
   }, [aplicarZoom]);
+
+  const cambiarAjuste = (a: Ajuste) => {
+    ajusteRef.current = a;
+    setAjuste(a);
+    useAjustes.getState().poner({ ajusteTexto: a === 'texto' });
+  };
+
+  /** Pone la vista donde corresponde para la página actual (y la recuerda si aún no está medida). */
+  const reencuadrar = (donde: Donde, animar: boolean) => {
+    const z = objetivo(donde);
+    if (!z) return;
+    const i = paginaRef.current;
+    encuadrePendiente.current = typeof donde !== 'object' && paginas.current?.contenido(i) === undefined ? donde : null;
+    ponerZoom(z, animar);
+    if (!animar) programarDetalle();
+  };
+  const reencuadrarRef = useRef(reencuadrar);
+  reencuadrarRef.current = reencuadrar;
+
+  // Para las pruebas automáticas (solo en desarrollo): el estado de la vista.
+  if (import.meta.env.DEV)
+    (globalThis as { __lector?: unknown }).__lector = {
+      zoom: () => zoomRef.current,
+      pagina: () => paginaRef.current,
+      ajuste: () => ajusteRef.current,
+      texto: () => encuadreDe(paginaRef.current),
+    };
 
   // ---------- 2. Motor WebGL, páginas, marcas y gestos ----------
   useEffect(() => {
@@ -279,7 +398,12 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     pags.onLista = (i, c) => {
       m.subirPagina(i, c);
       pintarMarcas(i);
-      if (visibles().includes(i)) setDibujada(visibles().every((j) => !!pags.obtener(j)));
+      if (visibles().includes(i)) {
+        setDibujada(visibles().every((j) => !!pags.obtener(j)));
+        const pendiente = encuadrePendiente.current;
+        if (i === paginaRef.current && pendiente && !gestos.current?.ocupado && !p.ocupado) reencuadrarRef.current(pendiente, true);
+        else if (necesitaDetalle(zoomRef.current)) programarDetalle();
+      }
     };
     pags.onSoltada = (i) => {
       lienzosMarcas.delete(i);
@@ -331,6 +455,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           void revisarMemoria();
         }
         quieta();
+        // Con zoom o de lado, la página nueva se empieza a leer desde arriba (o desde abajo, al volver).
+        if (paso && sePuedeMover()) reencuadrarRef.current(s === 'adelante' ? 'arriba' : 'abajo', true);
       },
       alEmpezar: () => {
         setCromo(false);
@@ -399,19 +525,43 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     marcador.current = mk;
 
     // Del lector (px CSS) a la hoja: pasar la hoja usa y hacia arriba, con el lomo en x = 0.
+    // Con mucho zoom, el recorrido del dedo se amplía (como si el zoom fuera 1,15): si no, no
+    // alcanzaría la pantalla para llevar la hoja hasta la mitad.
+    let arrastre: { pantalla: { x: number; y: number }; lienzo: { x: number; y: number }; factor: number } | null = null;
     const aHoja = (x: number, y: number) => {
-      const c = aLienzo(zoomRef.current, x, y);
+      const z = zoomRef.current;
+      const a = arrastre;
+      const c = a
+        ? { x: a.lienzo.x + ((x - a.pantalla.x) * a.factor) / z.z, y: a.lienzo.y + ((y - a.pantalla.y) * a.factor) / z.z }
+        : aLienzo(z, x, y);
       const h = dispRef.current?.hoja ?? { x: 0, y: 0, w: 1, h: 1 };
       return { x: c.x - h.x, y: h.y + h.h - c.y };
+    };
+
+    /** ¿Ya se ve el borde del texto hacia donde va el dedo? Entonces el dedo pasa la hoja. */
+    const puedePasar = (s: Sentido) => {
+      const d = dispRef.current;
+      const v = vistaTam();
+      if (!d || !v) return true;
+      const z = zoomRef.current;
+      const t = d.modo === 'doble' ? d.libro : (encuadreDe(paginaRef.current)?.texto ?? d.hoja);
+      const tolerancia = 14;
+      return s === 'adelante' ? z.x + z.z * (t.x + t.w) <= v.w + tolerancia : z.x + z.z * t.x >= -tolerancia;
     };
 
     gestos.current = new Gestos({
       zoom: () => zoomRef.current,
       ponerZoom: (z, animar) => ponerZoom(z, animar),
       herramienta: () => !!useFrases.getState().herramienta,
+      desplazable: sePuedeMover,
+      puedePasar,
+      alTocar: () => cancelAnimationFrame(animZoom.current),
       pasar: {
         bajar: (x, y, id) => {
+          const z = zoomRef.current;
+          arrastre = null;
           const q = aHoja(x, y);
+          arrastre = { pantalla: { x, y }, lienzo: aLienzo(z, x, y), factor: Math.max(1, z.z / 1.15) };
           const d = dispRef.current;
           // Sobre la mesa solo se toma el libro (con un poco de margen afuera).
           if (d && d.modo !== 'celular') {
@@ -460,8 +610,33 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       },
       dobleToque: (x, y) => {
         if (useFrases.getState().herramienta) return;
-        if (conZoom(zoomRef.current)) ponerZoom(SIN_ZOOM, true);
-        else ponerZoom(acercarEn(zoomRef.current, 2.5, x, y), true);
+        const d = dispRef.current;
+        const v = vistaTam();
+        if (!d || !v) return;
+        // Con zoom: vuelve a la página entera, dejando quieto el punto tocado.
+        if (ajusteRef.current !== 'pagina' || conZoom(zoomRef.current)) {
+          cambiarAjuste('pagina');
+          reencuadrar({ px: x, py: y }, true);
+          return;
+        }
+        // Sin zoom: el texto a todo el ancho de la pantalla. Si ya lo ocupa, se acerca al punto.
+        const e = d.modo === 'doble' ? null : encuadreDe(paginaRef.current);
+        if (e && zoomAlTexto(e, v) > 1.1) {
+          cambiarAjuste('texto');
+          reencuadrar({ px: x, py: y }, true);
+          setMensaje({ texto: 'Texto a todo el ancho · doble toque para volver', clave: Date.now() });
+        } else {
+          cambiarAjuste('libre');
+          ponerZoom(acercarEn(zoomRef.current, 2.5, x, y), true);
+        }
+      },
+      finPellizco: () => {
+        const z = zoomRef.current;
+        if (z.z < 1.08) {
+          cambiarAjuste('pagina');
+          const v = vistaTam();
+          ponerZoom(acercarEn(z, 1, (v?.w ?? 0) / 2, (v?.h ?? 0) / 2), true);
+        } else if (ajusteRef.current !== 'libre' || conZoom(z)) cambiarAjuste('libre');
       },
       finZoom: programarDetalle,
     });
@@ -499,21 +674,27 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       const h = el.clientHeight;
       if (!w || !h) return;
       setAnchoVentana(window.innerWidth);
-      const ancha = !(w / h < 0.9 || w < 560);
+      const ancha = !esCelular(w, h);
       const d = disponer(w, h, margenesSeguros(), aspecto, ancha ? { barraArriba: BARRA_ARRIBA, barraAbajo: BARRA_ABAJO } : {});
+      // Las páginas se dibujan a la medida de la hoja (de lado es más alta que la pantalla: menos
+      // densidad, y el detalle nítido se agrega encima); el lienzo, siempre a la de la pantalla.
       const dpr = densidad(window.devicePixelRatio, d.hoja.w, d.hoja.h);
+      const dprLienzo = densidad(window.devicePixelRatio, w, h);
       const cambioModo = dispRef.current?.modo !== d.modo;
       dispRef.current = d;
       setDisp(d);
       pasador.current?.cancelar();
       marcador.current?.cancelar();
       quitarZoom();
-      motor.current?.medir(w, h, dpr, d.hoja, { recortarLomo: d.modo === 'mesa', doble: d.modo === 'doble' });
+      motor.current?.medir(w, h, dprLienzo, d.hoja, { recortarLomo: d.modo === 'mesa', doble: d.modo === 'doble' });
       paginas.current?.configurar({ ancho: d.hoja.w, alto: d.hoja.h, dpr, caja: d.caja, titulo: libro.titulo });
       if (cambioModo) {
         motor.current?.poner(escenaQuieta());
         pedirPaginas();
       }
+      // Al girar el celular se conserva el ajuste (el texto a todo el ancho sigue así).
+      if (ajusteRef.current === 'libre') cambiarAjuste('pagina');
+      reencuadrarRef.current('arriba', false);
     };
     const obs = new ResizeObserver(medir);
     obs.observe(el);
@@ -549,6 +730,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     if (pagina === null || !doc || !libro) return;
     pedirPaginas();
     motor.current?.quitarDetalles();
+    if (necesitaDetalle(zoomRef.current)) programarDetalle();
     pendiente.current = { libroId: libro.id, pagina, total: doc.numPages, actualizado: Date.now(), capitulo };
     const t = setTimeout(anotar, 250);
     return () => clearTimeout(t);
@@ -570,6 +752,18 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   useEffect(() => {
     void motor.current?.ponerPapel(papel);
   }, [papel]);
+
+  // Sonido de fondo de este libro: suena mientras se lee y se calla al salir o al cambiar de app.
+  const ambienteLibro = useLibros((s) => s.libros.find((l) => l.id === libroId)?.ambiente ?? null);
+  useEffect(() => {
+    const aplicar = () => ambiente.poner(document.visibilityState === 'visible' ? ambienteLibro : null);
+    aplicar();
+    document.addEventListener('visibilitychange', aplicar);
+    return () => {
+      document.removeEventListener('visibilitychange', aplicar);
+      ambiente.poner(null);
+    };
+  }, [ambienteLibro]);
 
   // Con el resaltador o el lápiz se lee la capa de texto de las páginas visibles (una vez por página).
   useEffect(() => {
@@ -621,13 +815,13 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     (n: number) => {
       if (!doc) return;
       const destino = Math.max(0, Math.min(doc.numPages - 1, n));
-      quitarZoom();
       paginaRef.current = destino;
       setPagina(destino);
       void revisarMemoria();
       motor.current?.poner(escenaQuieta());
+      reencuadrarRef.current('arriba', false);
     },
-    [doc, quitarZoom, revisarMemoria, escenaQuieta],
+    [doc, revisarMemoria, escenaQuieta],
   );
 
   // ---------- 5. Teclado: ← → pasan la hoja; Ctrl + / − / 0 acercan ----------
@@ -639,10 +833,14 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         const cx = el.clientWidth / 2;
         const cy = el.clientHeight / 2;
         const z = zoomRef.current;
-        if (e.key === '+' || e.key === '=') ponerZoom(acercarEn(z, z.z * 1.4, cx, cy), true);
-        else if (e.key === '-') ponerZoom(acercarEn(z, z.z / 1.4, cx, cy), true);
-        else if (e.key === '0') ponerZoom(SIN_ZOOM, true);
-        else return;
+        if (e.key === '+' || e.key === '=' || e.key === '-') {
+          ponerZoom(acercarEn(z, e.key === '-' ? z.z / 1.4 : z.z * 1.4, cx, cy), true);
+          if (e.key !== '-' || z.z / 1.4 > 1.08) cambiarAjuste('libre');
+          else cambiarAjuste('pagina');
+        } else if (e.key === '0') {
+          cambiarAjuste('pagina');
+          reencuadrarRef.current('arriba', true);
+        } else return;
         e.preventDefault();
         return;
       }
@@ -650,13 +848,13 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       const atras = ['ArrowLeft', 'PageUp'].includes(e.key);
       if (!adelante && !atras) return;
       e.preventDefault();
-      if (conZoom(zoomRef.current)) quitarZoom();
       sonido.despertar();
       pasador.current?.pasarSola(adelante ? 'adelante' : 'atras');
     };
     window.addEventListener('keydown', tecla);
     return () => window.removeEventListener('keydown', tecla);
-  }, [panel, ponerZoom, quitarZoom]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel, ponerZoom]);
 
   // Rueda: Ctrl + rueda acerca (y el navegador no hace su propio zoom); con zoom, la rueda desplaza.
   useEffect(() => {
@@ -804,8 +1002,14 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
 
       <AvisoModo />
       <AvisoBreve mensaje={mensaje} alCerrar={cerrarMensaje} />
-      {hayZoom && !herramienta && (
-        <button className="quitar-zoom" onClick={() => ponerZoom(SIN_ZOOM, true)}>
+      {hayZoom && ajuste === 'libre' && !herramienta && (
+        <button
+          className="quitar-zoom"
+          onClick={() => {
+            cambiarAjuste('pagina');
+            reencuadrar('arriba', true);
+          }}
+        >
           Tamaño normal
         </button>
       )}
@@ -820,7 +1024,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         />
       )}
 
-      {panel && <PapelYSonido alCerrar={() => setPanel(false)} />}
+      {panel && <PapelYSonido libroId={libroId} alCerrar={() => setPanel(false)} />}
     </div>
   );
 }

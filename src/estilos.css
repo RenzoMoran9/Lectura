@@ -446,3 +446,27 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: 0; bo
 .ficha-pie .btn-tinta { margin: 0; padding: 11px 20px; font-size: 14.5px; }
 .ficha-pie .btn-tinta:disabled { opacity: .6; }
 .inicio .titulo-fila .titulo-app { margin-bottom: 14px; }
+
+/* ---------- sonido de fondo (en «Papel y sonido») ---------- */
+.ajustes { max-height: calc(100dvh - var(--seguro-arriba) - 16px); overflow-y: auto; overscroll-behavior: contain; }
+.eti-nota { font: italic 400 12px "Fraunces"; letter-spacing: 0; text-transform: none; color: var(--tinta-3); }
+.sub-eti { font: 500 12px "DM Sans"; color: var(--tinta-2); margin: 4px 0 8px; }
+.ambientes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+.ambiente { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.ambiente-i {
+  width: 100%; height: 58px; border-radius: 12px; display: grid; place-items: center;
+  background: rgba(60, 40, 20, .06); color: var(--tinta-2);
+  box-shadow: 0 0 0 1px rgba(60, 40, 20, .1);
+  transition: box-shadow .15s, transform .15s;
+}
+.ambiente-n { font: 500 11.5px/1.2 "DM Sans"; color: var(--tinta-2); text-align: center; }
+.ambiente.on .ambiente-i { box-shadow: 0 0 0 2.5px var(--tinta); transform: translateY(-1px); }
+.ambiente.on .ambiente-n { color: var(--tinta); font-weight: 600; }
+.ambiente-playa .ambiente-i { background: #DDE8E6; color: #3E6A6C; }
+.ambiente-bosque .ambiente-i { background: #EADBC4; color: #8A4B22; }
+.ambiente-lluvia .ambiente-i { background: #DFE2E4; color: #4F5E6B; }
+.ambiente-terror .ambiente-i { background: #2B2A2C; color: #CFC7BA; }
+.ambiente-suspenso .ambiente-i { background: #34363E; color: #D8CDB8; }
+.ambiente-drama .ambiente-i { background: #5B2F36; color: #EBD3C8; }
+.ambiente-accion .ambiente-i { background: #4B3526; color: #EBCB9C; }
+.vol-ambiente { margin-left: 0; }

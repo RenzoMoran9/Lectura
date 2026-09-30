@@ -1,12 +1,32 @@
-// Hoja inferior «Papel y sonido»: los cuatro papeles, el sonido, su volumen y su tipo.
+// Hoja inferior «Papel y sonido»: los cuatro papeles, el sonido de la hoja (volumen y tipo) y el
+// sonido de fondo de este libro (para relajarse o según su género), con su propio volumen.
 
 import { useAjustes } from '../estado/ajustes';
+import { useLibros } from '../estado/libros';
 import { PAPELES, TIPOS_PAPEL } from '../hoja/papel';
+import { AMBIENTES, type TipoAmbiente } from '../sonido/ambiente';
 import { sonido } from '../sonido/sonido';
-import { Icono } from './Icono';
+import { Icono, type NombreIcono } from './Icono';
 
-export function PapelYSonido({ alCerrar }: { alCerrar: () => void }) {
-  const { papel, sonido: conSonido, volumen, juego, poner } = useAjustes();
+function Ambiente({ id, nombre, icono, on, alElegir }: { id: string; nombre: string; icono: NombreIcono; on: boolean; alElegir: () => void }) {
+  return (
+    <button className={`ambiente ambiente-${id} ${on ? 'on' : ''}`} onClick={alElegir} aria-pressed={on}>
+      <span className="ambiente-i">
+        <Icono nombre={icono} tam={22} />
+      </span>
+      <span className="ambiente-n">{nombre}</span>
+    </button>
+  );
+}
+
+export function PapelYSonido({ libroId, alCerrar }: { libroId: string; alCerrar: () => void }) {
+  const { papel, sonido: conSonido, volumen, juego, volumenAmbiente, poner } = useAjustes();
+  const elegido = useLibros((s) => s.libros.find((l) => l.id === libroId)?.ambiente ?? null);
+  const actualizar = useLibros((s) => s.actualizar);
+  const elegir = (tipo: TipoAmbiente | null) => {
+    sonido.despertar();
+    void actualizar(libroId, { ambiente: tipo ?? undefined });
+  };
 
   return (
     <div className="velo velo-hoja" onClick={alCerrar}>
@@ -69,6 +89,39 @@ export function PapelYSonido({ alCerrar }: { alCerrar: () => void }) {
         <button className="probar" disabled={!conSonido} onClick={() => sonido.probar()}>
           <Icono nombre="play" tam={15} /> Probar sonido
         </button>
+
+        <div className="sep" />
+        <div className="eti-sec fila-eti">
+          <span>Sonido de fondo</span>
+          <span className="eti-nota">se recuerda en este libro</span>
+        </div>
+        <div className="sub-eti">Para relajarse</div>
+        <div className="ambientes">
+          <Ambiente id="ninguno" nombre="Ninguno" icono="volume-x" on={!elegido} alElegir={() => elegir(null)} />
+          {AMBIENTES.filter((a) => a.grupo === 'relajarse').map((a) => (
+            <Ambiente key={a.id} id={a.id} nombre={a.nombre} icono={a.icono} on={elegido === a.id} alElegir={() => elegir(a.id)} />
+          ))}
+        </div>
+        <div className="sub-eti">Según el libro</div>
+        <div className="ambientes">
+          {AMBIENTES.filter((a) => a.grupo === 'genero').map((a) => (
+            <Ambiente key={a.id} id={a.id} nombre={a.nombre} icono={a.icono} on={elegido === a.id} alElegir={() => elegir(a.id)} />
+          ))}
+        </div>
+        <div className={`vol vol-ambiente ${elegido ? '' : 'apagado'}`}>
+          <small>Volumen</small>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volumenAmbiente}
+            disabled={!elegido}
+            style={{ '--v': `${volumenAmbiente * 100}%` } as React.CSSProperties}
+            onChange={(e) => poner({ volumenAmbiente: Number(e.target.value) })}
+            aria-label="Volumen del sonido de fondo"
+          />
+        </div>
       </div>
     </div>
   );

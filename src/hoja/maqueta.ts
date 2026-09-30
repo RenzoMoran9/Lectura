@@ -1,5 +1,6 @@
 // Dónde va la hoja en la pantalla y dónde cabe la página del PDF dentro de ella.
 //  - Celular (vertical): la hoja ocupa toda la pantalla; el lomo es el borde izquierdo.
+//  - Celular de lado: la página se agranda a todo el ancho y se lee bajando con el dedo.
 //  - Pantalla ancha (PC, tablet en horizontal): libro abierto a doble página sobre la mesa.
 //  - Pantalla mediana (tablet en vertical): una hoja con la forma de la página, sobre la mesa.
 // La página del PDF se ajusta entera dentro de la caja, sin recortarla ni deformarla.
@@ -37,22 +38,21 @@ export interface OpcionesDisposicion {
 }
 
 export function disponer(ancho: number, alto: number, seguro: Margenes, aspecto: number, o: OpcionesDisposicion = {}): Disposicion {
-  const celular = ancho / alto < 0.9 || ancho < 560;
+  const celular = esCelular(ancho, alto);
   if (celular) {
     const arriba = seguro.arriba + 30;
     const abajo = seguro.abajo + 30;
     const lado = 6;
-    const hoja = { x: 0, y: 0, w: ancho, h: alto };
+    const cajaW = Math.max(50, ancho - 2 * lado - seguro.izquierda - seguro.derecha);
+    let cajaH = Math.max(50, alto - arriba - abajo);
+    // De lado, la página va a todo el ancho: la hoja queda más alta que la pantalla y se desliza.
+    if (ancho > alto) cajaH = Math.max(cajaH, Math.round(cajaW / aspecto));
+    const hoja = { x: 0, y: 0, w: ancho, h: Math.max(alto, arriba + cajaH + abajo) };
     return {
       modo: 'celular',
       hoja,
       libro: hoja,
-      caja: {
-        x: lado + seguro.izquierda,
-        y: arriba,
-        w: Math.max(50, ancho - 2 * lado - seguro.izquierda - seguro.derecha),
-        h: Math.max(50, alto - arriba - abajo),
-      },
+      caja: { x: lado + seguro.izquierda, y: arriba, w: cajaW, h: cajaH },
     };
   }
   const panel = o.panel ?? 0;
@@ -84,6 +84,12 @@ export function disponer(ancho: number, alto: number, seguro: Margenes, aspecto:
     caja: { x: bandaH, y: bandaV, w: w - 2 * bandaH, h: h - 2 * bandaV },
   };
 }
+
+/**
+ * Una página a la vez, a pantalla completa: el celular en vertical o de lado (poca altura). Las
+ * tablets y la PC en horizontal abren el libro a doble página.
+ */
+export const esCelular = (ancho: number, alto: number) => ancho / alto < 0.9 || ancho < 560 || alto < 500;
 
 /** Densidad con la que se dibujan las páginas: nítida, pero sin pasarse de memoria. */
 export function densidad(dprPantalla: number, w: number, h: number, maxPixeles = 3.2e6) {

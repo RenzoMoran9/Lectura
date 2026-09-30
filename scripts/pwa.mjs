@@ -12,8 +12,9 @@ function archivosDe(dir) {
   });
 }
 
-// Lo que no hace falta para leer sin internet: el libro de muestra (se guarda si se usa) y las licencias.
-const FUERA = [/^muestra\//, /\.md$/i, /\.map$/, /^sw\.js$/];
+// Lo que no hace falta para leer sin internet: el libro de muestra y los sonidos de fondo (se guardan
+// la primera vez que se usan) y las licencias.
+const FUERA = [/^muestra\//, /^ambiente\//, /\.md$/i, /\.map$/, /^sw\.js$/];
 
 export function pwa() {
   let publico = '';

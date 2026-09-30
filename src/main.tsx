@@ -4,6 +4,7 @@ import { App } from './App';
 import { useAjustes } from './estado/ajustes';
 import { instalarTexturasCss } from './hoja/papel';
 import { iniciarPwa } from './pwa/pwa';
+import { ambiente } from './sonido/ambiente';
 import { sonido } from './sonido/sonido';
 import './estilos.css';
 
@@ -12,7 +13,8 @@ iniciarPwa();
 
 // El motor de sonido sigue a los ajustes guardados.
 const aplicarSonido = () => {
-  const { sonido: activo, volumen, juego } = useAjustes.getState();
+  const { sonido: activo, volumen, juego, volumenAmbiente } = useAjustes.getState();
+  ambiente.ponerVolumen(volumenAmbiente);
   sonido.activo = activo;
   sonido.volumen = volumen;
   if (sonido.juego !== juego) sonido.cambiarJuego(juego);

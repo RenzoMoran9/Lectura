@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { avance, calcularDoblez, doblarPunto, pasaLaHoja, posicionPasada, radioMaximo, restringir } from './geometria';
-import { densidad, disponer, pliego } from './maqueta';
-import { acercarEn, aLienzo, limitar } from './zoom';
+import { densidad, disponer, esCelular, pliego } from './maqueta';
+import { acercarEn, aLienzo, desplazable, encuadrar, limitar, zoomAlTexto } from './zoom';
 
 const W = 390;
 const H = 844;
@@ -101,6 +101,30 @@ describe('zoom', () => {
     cerca(centro, 700);
   });
 
+  it('ajustar al texto: el texto ocupa todo el ancho, sin cortar nada', () => {
+    const e = { texto: { x: 40, y: 200, w: 310, h: 420 }, ancho: 310, margen: { lado: 10, arriba: 20, abajo: 20 } };
+    const z = zoomAlTexto(e, vista);
+    const q = encuadrar(z, e, vista, 'arriba');
+    cerca(q.x + z * e.texto.x, 10, 0.5); // borde izquierdo del texto
+    cerca(q.x + z * (e.texto.x + e.texto.w), 380, 0.5); // borde derecho
+    // Cabe a lo alto: queda centrado.
+    cerca(q.y + z * (e.texto.y + e.texto.h / 2), 422, 0.5);
+  });
+
+  it('ajustar al texto: si no cabe a lo alto, empieza arriba al avanzar y abajo al volver', () => {
+    const e = { texto: { x: 20, y: 40, w: 800, h: 1000 }, ancho: 800, margen: { lado: 10, arriba: 16, abajo: 16 } };
+    const v = { w: 844, h: 390 };
+    const z = zoomAlTexto(e, v);
+    cerca(encuadrar(z, e, v, 'arriba').y + z * 40, 16, 0.5);
+    cerca(encuadrar(z, e, v, 'abajo').y + z * 1040, 390 - 16, 0.5);
+  });
+
+  it('de lado, sin zoom, la hoja alta se puede deslizar', () => {
+    const d = disponer(844, 390, { arriba: 0, abajo: 21, izquierda: 47, derecha: 47 }, 0.77);
+    expect(desplazable({ z: 1, x: 0, y: 0 }, d.libro, { w: 844, h: 390 })).toBe(true);
+    expect(desplazable({ z: 1, x: 0, y: 0 }, libro, vista)).toBe(false);
+  });
+
   it('en doble página se pasa pasada la mitad: el lomo', () => {
     const P = { x: 380, y: 80 };
     expect(pasaLaHoja(avance('adelante', P, { x: 20, y: 80 }, true))).toBe(false);
@@ -153,6 +177,15 @@ describe('disposición en pantalla', () => {
     const d = disponer(650, 680, { arriba: 0, abajo: 0, izquierda: 0, derecha: 0 }, 0.7, { barraArriba: 52, barraAbajo: 56 });
     expect(d.modo).toBe('mesa');
     cerca(d.hoja.x + d.hoja.w / 2, 325, 1);
+  });
+
+  it('el celular de lado: una página a todo el ancho, más alta que la pantalla', () => {
+    const d = disponer(844, 390, { arriba: 0, abajo: 21, izquierda: 47, derecha: 47 }, 0.77);
+    expect(d.modo).toBe('celular');
+    expect(d.caja.w).toBe(844 - 12 - 94);
+    cerca(d.caja.h, d.caja.w / 0.77, 1);
+    expect(d.hoja.h).toBeGreaterThan(390);
+    expect(esCelular(1180, 820)).toBe(false); // la tablet de lado sigue a doble página
   });
 
   it('los pliegos: la portada sola a la derecha y luego de a dos', () => {

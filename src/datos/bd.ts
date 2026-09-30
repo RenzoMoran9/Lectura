@@ -3,6 +3,7 @@
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Frase } from '../frases/modelo';
+import type { TipoAmbiente } from '../sonido/ambiente';
 
 export type Almacen = 'opfs' | 'idb';
 
@@ -24,6 +25,8 @@ export interface Libro {
   portadaOrigen?: 'pdf' | 'internet' | 'tela';
   /** Estilo de la portada de tela (índice en ESTILOS_TELA). */
   portadaTela?: number;
+  /** Sonido de fondo elegido para leer este libro. */
+  ambiente?: TipoAmbiente;
   /** Ya se buscó su portada en internet (o la eligió el usuario): no se vuelve a buscar sola. */
   portadaBuscada?: boolean;
 }

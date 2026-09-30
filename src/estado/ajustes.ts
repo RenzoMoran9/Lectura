@@ -17,6 +17,10 @@ export interface Ajustes {
   boton: { lado: 'izq' | 'der'; y: number };
   /** Panel lateral con Mis frases del libro (pantallas anchas). */
   panelFrases: boolean;
+  /** Volumen del sonido de fondo (playa, lluvia, terror…), 0..1. */
+  volumenAmbiente: number;
+  /** Leer con el texto a todo el ancho de la pantalla (doble toque para cambiar). */
+  ajusteTexto: boolean;
   /** Buscar sola la portada original de cada libro en Open Library y Google Books. */
   portadasEnLinea: boolean;
   /** Ya no mostrar el aviso de cómo instalar la app en el iPhone. */
@@ -35,6 +39,8 @@ export const useAjustes = create<Ajustes>()(
       colorLapiz: 'grafito',
       boton: { lado: 'der', y: 1 },
       panelFrases: true,
+      volumenAmbiente: 0.6,
+      ajusteTexto: false,
       portadasEnLinea: true,
       sinAvisoInstalar: false,
       poner: (cambios) => set(cambios),

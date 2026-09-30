@@ -106,6 +106,15 @@ export class SonidoPapel {
     }
     if (this.ctx.state !== 'running') void this.ctx.resume().catch(() => {});
     void this.cargar(this.juego);
+    this.alDespertar?.(this.ctx);
+  }
+
+  /** Aviso para el sonido de fondo: el audio ya se puede usar. */
+  alDespertar?: (ctx: AudioContext) => void;
+
+  /** El contexto de audio, si ya se encendió con un toque. */
+  get contexto(): AudioContext | null {
+    return this.ctx;
   }
 
   private cargar(juego: JuegoSonido): Promise<Juego> {

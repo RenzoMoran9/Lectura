@@ -112,10 +112,13 @@ Pantallas:
   - Varias variantes elegidas al azar, para que no suene repetido.
   - Grabaciones reales de licencia libre (CC0, por ejemplo de Freesound). Alternativa: generarlas con ElevenLabs.
   - Dos juegos de sonido: «libro nuevo» y «libro antiguo».
+  - Sonido de fondo opcional mientras se lee, elegido para cada libro: para relajarse (playa, bosque y fogata, lluvia) o según el género (terror, suspenso, drama, acción), con su propio volumen.
 - **Gestos:**
   - En modo lectura, el dedo pasa las hojas.
   - En modo resaltar o encerrar, el dedo marca y la hoja no se pasa (aviso arriba con «Listo» para salir).
-  - Se pellizca para acercar.
+  - Se pellizca para acercar. Con zoom, arriba y abajo mueve la página y a los lados la pasa (cuando ya se ve el borde del texto); el zoom se mantiene en la página siguiente.
+  - Doble toque: el texto a todo el ancho de la pantalla (se recortan los márgenes blancos, sin cortar el texto) o vuelve a la página entera.
+  - Celular de lado: la página va a todo el ancho y se lee deslizando hacia abajo.
 - **PDFs escaneados (sin texto):** se leen igual. Lo que se resalte o encierre se guarda como recorte de imagen. El reconocimiento de texto (OCR) queda para más adelante.
 - **Celular:** una página a la vez.
 - **PC o tablet en horizontal:** doble página, las flechas ← → pasan la hoja con el mismo sonido y Mis frases va en un panel lateral.

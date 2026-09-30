@@ -1,6 +1,7 @@
 // Dibuja las páginas del PDF en lienzos del tamaño de la hoja, listos para usarse como textura.
 // Solo se dibujan la página visible y sus vecinas; las demás se sueltan para no gastar memoria.
 
+import { medirContenido, type Contenido } from './contenido';
 import type { DocumentoPdf } from './pdf';
 
 export interface Maqueta {
@@ -96,6 +97,31 @@ export class Paginas {
     return this.ubicaciones.get(indice);
   }
 
+  // Tamaño de cada página (en puntos) y dónde está lo impreso: no dependen de la pantalla.
+  private tamanos = new Map<number, { ancho: number; alto: number }>();
+  private contenidos = new Map<number, Contenido | null>();
+
+  /** Rectángulo de la página del PDF en la hoja (px CSS), con la disposición actual. */
+  rectPagina(indice: number): { x: number; y: number; w: number; h: number } | null {
+    const m = this.maqueta;
+    const t = this.tamanos.get(indice);
+    if (!m || !t) return null;
+    const escala = Math.min(m.caja.w / t.ancho, m.caja.h / t.alto);
+    const w = t.ancho * escala;
+    const h = t.alto * escala;
+    return { x: m.caja.x + (m.caja.w - w) / 2, y: m.caja.y + (m.caja.h - h) / 2, w, h };
+  }
+
+  /** Lo impreso de la página (fracciones de la página), si ya se midió. `null`: página en blanco. */
+  contenido(indice: number): Contenido | null | undefined {
+    return this.contenidos.get(indice);
+  }
+
+  /** Lo impreso de todas las páginas medidas hasta ahora. */
+  contenidosMedidos(): Contenido[] {
+    return [...this.contenidos.values()].filter((c): c is Contenido => !!c);
+  }
+
   /** Tamaño del lienzo de cada página (px del dispositivo) y su densidad. */
   get lienzoTam() {
     const m = this.maqueta;
@@ -143,6 +169,12 @@ export class Paginas {
       tareaRender = tarea;
       await tarea.promise;
       if (cancelado) return;
+      this.tamanos.set(indice, { ancho: base.width, alto: base.height });
+      if (!this.contenidos.has(indice)) {
+        this.contenidos.set(indice, medirContenido(lienzo, x * m.dpr, y * m.dpr, anchoPag * m.dpr, altoPag * m.dpr));
+        // Solo se recuerdan unas cuantas (para el ancho típico del texto del libro).
+        if (this.contenidos.size > 60) this.contenidos.delete(this.contenidos.keys().next().value!);
+      }
       this.cabecera(ctx, m, indice, y, y + altoPag);
       pagina.cleanup();
       if (version !== this.version || !this.deseadas.includes(indice)) return;

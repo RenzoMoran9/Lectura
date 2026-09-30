@@ -1,11 +1,14 @@
 // Reparte los toques de la pantalla del lector:
-//  - un dedo: pasa la hoja; con una herramienta, marca; con zoom, mueve la página;
+//  - un dedo: pasa la hoja; con una herramienta, marca;
+//  - con zoom (o de lado, con la hoja más alta que la pantalla): arriba y abajo mueve la página;
+//    a los lados, pasa la hoja si ya se ve el borde del texto (si no, primero lo muestra);
 //  - dos dedos: pellizco para acercar o alejar (y mover a la vez);
-//  - doble toque: acerca donde tocaste, o vuelve al tamaño normal;
+//  - doble toque: ajusta el texto al ancho de la pantalla, o vuelve al tamaño normal;
 //  - rueda: con Ctrl acerca hacia el cursor; sin Ctrl y con zoom, desplaza.
 // Las coordenadas son px CSS dentro del lector.
 
-import { acercarEn, conZoom, SIN_ZOOM, type Zoom } from './zoom';
+import type { Sentido } from './geometria';
+import { acercarEn, type Zoom } from './zoom';
 
 export interface Delegado {
   bajar: (x: number, y: number, id: number) => void;
@@ -18,17 +21,26 @@ export interface OpcionesGestos {
   zoom: () => Zoom;
   ponerZoom: (z: Zoom, animar?: boolean) => void;
   herramienta: () => boolean;
+  /** ¿Se puede mover la vista? (con zoom, o con la hoja más alta que la pantalla). */
+  desplazable: () => boolean;
+  /** Con la vista movible: ¿ya se ve el borde del texto hacia ese lado, para pasar la hoja? */
+  puedePasar: (sentido: Sentido) => boolean;
   pasar: Delegado;
   marcar: Delegado;
   tocar: (x: number, y: number) => void;
   dobleToque: (x: number, y: number) => void;
-  /** El zoom quedó quieto: momento de dibujar el detalle nítido. */
+  /** Terminó un pellizco (o Ctrl + rueda): se decide si queda con zoom o vuelve a lo normal. */
+  finPellizco: () => void;
+  /** La vista quedó quieta: momento de dibujar el detalle nítido. */
   finZoom: () => void;
+  /** El dedo tocó la pantalla: se detiene cualquier movimiento que viniera de antes. */
+  alTocar?: () => void;
 }
 
-type Modo = 'nada' | 'pasar' | 'marcar' | 'mover' | 'pellizco' | 'esperar';
+type Modo = 'nada' | 'decidir' | 'pasar' | 'marcar' | 'mover' | 'pellizco' | 'esperar';
 
 const TOQUE_MOV = 9;
+const DECIDIR = 10;
 const TOQUE_MS = 350;
 const DOBLE_MS = 300;
 
@@ -40,10 +52,16 @@ export class Gestos {
   private ultimoToque: { x: number; y: number; t: number } | null = null;
   private pendiente = 0;
   private ruedaQuieta = 0;
+  /** Al mover hacia arriba o abajo, la página no se corre de lado. */
+  private soloVertical = false;
+  private velocidad = { x: 0, y: 0, t: 0 };
+  private inercia = 0;
 
   constructor(private o: OpcionesGestos) {}
 
   bajar(x: number, y: number, id: number) {
+    this.pararInercia();
+    this.o.alTocar?.();
     this.punteros.set(id, { x, y });
     if (this.punteros.size === 2) return this.empezarPellizco();
     if (this.punteros.size > 2 || this.modo === 'esperar') return;
@@ -51,8 +69,8 @@ export class Gestos {
     if (this.o.herramienta()) {
       this.modo = 'marcar';
       this.o.marcar.bajar(x, y, id);
-    } else if (conZoom(this.o.zoom())) {
-      this.modo = 'mover';
+    } else if (this.o.desplazable()) {
+      this.modo = 'decidir';
     } else {
       this.modo = 'pasar';
       this.o.pasar.bajar(x, y, id);
@@ -65,18 +83,47 @@ export class Gestos {
     this.punteros.set(id, { x, y });
     if (this.toque && Math.hypot(x - this.toque.x, y - this.toque.y) > TOQUE_MOV) this.toque.movido = true;
     switch (this.modo) {
+      case 'decidir':
+        return this.decidir(x, y, id);
       case 'pellizco':
         return this.seguirPellizco();
-      case 'mover': {
-        const z = this.o.zoom();
-        this.o.ponerZoom({ z: z.z, x: z.x + x - antes.x, y: z.y + y - antes.y });
-        return;
-      }
+      case 'mover':
+        return this.desplazar(x - antes.x, y - antes.y);
       case 'marcar':
         return this.o.marcar.mover(x, y, id);
       case 'pasar':
         return this.o.pasar.mover(x, y, id);
     }
+  }
+
+  /** Con la vista movible, el primer tramo del dedo dice qué quiere: mover la página o pasarla. */
+  private decidir(x: number, y: number, id: number) {
+    const t = this.toque;
+    if (!t) return;
+    const dx = x - t.x;
+    const dy = y - t.y;
+    if (Math.hypot(dx, dy) < DECIDIR) return;
+    const deLado = Math.abs(dx) > Math.abs(dy) * 1.2;
+    if (deLado && this.o.puedePasar(dx < 0 ? 'adelante' : 'atras')) {
+      this.modo = 'pasar';
+      this.o.pasar.bajar(t.x, t.y, id);
+      this.o.pasar.mover(x, y, id);
+      return;
+    }
+    this.modo = 'mover';
+    this.soloVertical = !deLado;
+    this.velocidad = { x: 0, y: 0, t: performance.now() };
+    this.desplazar(dx, dy);
+  }
+
+  private desplazar(dx: number, dy: number) {
+    if (this.soloVertical) dx = 0;
+    const z = this.o.zoom();
+    this.o.ponerZoom({ z: z.z, x: z.x + dx, y: z.y + dy });
+    const ahora = performance.now();
+    const dt = Math.max(1, ahora - this.velocidad.t);
+    const k = Math.min(1, dt / 40);
+    this.velocidad = { x: this.velocidad.x * (1 - k) + (dx / dt) * k, y: this.velocidad.y * (1 - k) + (dy / dt) * k, t: ahora };
   }
 
   subir(x: number, y: number, id: number) {
@@ -85,13 +132,17 @@ export class Gestos {
     const modo = this.modo;
     if (modo === 'pellizco' || modo === 'esperar') {
       this.modo = this.punteros.size ? 'esperar' : 'nada';
-      if (!this.punteros.size) this.terminarZoom();
+      if (!this.punteros.size) this.terminarPellizco();
       return;
     }
     this.modo = 'nada';
     if (modo === 'marcar') return this.o.marcar.subir(x, y, id);
     if (modo === 'pasar') this.o.pasar.subir(x, y, id);
-    if (modo === 'mover') this.o.finZoom();
+    if (modo === 'mover') {
+      // Si el dedo se soltó en movimiento, la página sigue deslizándose y frena sola.
+      if (performance.now() - this.velocidad.t < 80 && Math.hypot(this.velocidad.x, this.velocidad.y) > 0.25) this.deslizar();
+      else this.o.finZoom();
+    }
     const t = this.toque;
     this.toque = null;
     if (t && !t.movido && performance.now() - t.t < TOQUE_MS) this.registrarToque(x, y);
@@ -103,7 +154,8 @@ export class Gestos {
     if (this.modo === 'marcar') this.o.marcar.cancelar();
     if (this.modo === 'pasar') this.o.pasar.cancelar();
     if (!this.punteros.size) {
-      if (this.modo === 'pellizco' || this.modo === 'esperar' || this.modo === 'mover') this.terminarZoom();
+      if (this.modo === 'pellizco' || this.modo === 'esperar') this.terminarPellizco();
+      else if (this.modo === 'mover') this.o.finZoom();
       this.modo = 'nada';
     }
     this.toque = null;
@@ -113,14 +165,16 @@ export class Gestos {
   rueda(e: { deltaX: number; deltaY: number; deltaMode: number; ctrlKey: boolean; metaKey: boolean }, x: number, y: number): boolean {
     const escala = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
     const z = this.o.zoom();
+    let pellizco = false;
     if (e.ctrlKey || e.metaKey) {
       const nuevo = z.z * Math.exp(-e.deltaY * escala * 0.0024);
       this.o.ponerZoom(acercarEn(z, nuevo, x, y));
-    } else if (conZoom(z)) {
+      pellizco = true;
+    } else if (this.o.desplazable()) {
       this.o.ponerZoom({ z: z.z, x: z.x - e.deltaX * escala, y: z.y - e.deltaY * escala });
     } else return false;
     clearTimeout(this.ruedaQuieta);
-    this.ruedaQuieta = window.setTimeout(() => this.terminarZoom(), 180);
+    this.ruedaQuieta = window.setTimeout(() => (pellizco ? this.terminarPellizco() : this.o.finZoom()), 180);
     return true;
   }
 
@@ -145,9 +199,42 @@ export class Gestos {
     this.o.ponerZoom({ z: z.z, x: z.x + m.x - p.m0.x, y: z.y + m.y - p.m0.y });
   }
 
-  private terminarZoom() {
+  private terminarPellizco() {
     this.pellizco = null;
-    if (this.o.zoom().z < 1.08) this.o.ponerZoom(SIN_ZOOM, true);
+    this.o.finPellizco();
+    this.o.finZoom();
+  }
+
+  private deslizar() {
+    let { x: vx, y: vy } = this.velocidad;
+    let antes = performance.now();
+    const paso = () => {
+      const ahora = performance.now();
+      const dt = Math.min(40, ahora - antes);
+      antes = ahora;
+      const z = this.o.zoom();
+      this.o.ponerZoom({ z: z.z, x: z.x + vx * dt, y: z.y + vy * dt });
+      const tras = this.o.zoom();
+      // Contra el borde, se frena en ese eje.
+      if (Math.abs(tras.x - z.x) < 0.01) vx = 0;
+      if (Math.abs(tras.y - z.y) < 0.01) vy = 0;
+      const freno = Math.exp(-dt / 330);
+      vx *= freno;
+      vy *= freno;
+      if (Math.hypot(vx, vy) < 0.02) {
+        this.inercia = 0;
+        this.o.finZoom();
+        return;
+      }
+      this.inercia = requestAnimationFrame(paso);
+    };
+    this.inercia = requestAnimationFrame(paso);
+  }
+
+  private pararInercia() {
+    if (!this.inercia) return;
+    cancelAnimationFrame(this.inercia);
+    this.inercia = 0;
     this.o.finZoom();
   }
 
@@ -165,8 +252,15 @@ export class Gestos {
     this.pendiente = window.setTimeout(() => this.o.tocar(x, y), DOBLE_MS - 20);
   }
 
+  /** ¿Hay un gesto en curso? (para no mover la vista por debajo del dedo). */
+  get ocupado() {
+    return this.modo !== 'nada' || this.inercia !== 0;
+  }
+
   destruir() {
     clearTimeout(this.pendiente);
     clearTimeout(this.ruedaQuieta);
+    cancelAnimationFrame(this.inercia);
   }
 }
+
