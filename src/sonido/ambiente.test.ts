@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { unirEnBucle } from './ambiente';
+import { rmsAudible, unirEnBucle } from './ambiente';
 
 // Un «AudioBuffer» mínimo para probar la mezcla sin navegador.
 function buffer(canales: Float32Array[], sampleRate = 100) {
@@ -29,5 +29,14 @@ describe('sonido de fondo: el bucle', () => {
     expect(d[850]).toBeLessThan(0.1); // A se va y entra B
     expect(d[1200]).toBeCloseTo(-1); // B
     expect(d[1799]).toBeGreaterThan(0.9); // al final, casi solo A: vuelve al comienzo sin salto
+  });
+
+  it('el volumen se mide por lo que se oye: un grave profundo casi no cuenta', () => {
+    const sr = 44100;
+    const tono = (f: number) => Float32Array.from({ length: sr }, (_, i) => 0.5 * Math.sin((2 * Math.PI * f * i) / sr));
+    const grave = rmsAudible(tono(60), sr);
+    const medio = rmsAudible(tono(2000), sr);
+    expect(medio).toBeGreaterThan(0.3);
+    expect(grave).toBeLessThan(medio / 20);
   });
 });

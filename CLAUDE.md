@@ -10,8 +10,9 @@ La uso sobre todo desde el celular, y también desde la computadora.
 ## Funciones imprescindibles
 1. **Subir un PDF de cualquier tamaño.** No se convierte ni se transforma: se guarda tal cual y se ve en el orden en que viene.
 2. **Pasar la hoja con el dedo, como en la vida real.**
-   - La hoja se curva y sigue el dedo durante todo el recorrido. No pasa sola con un toque ni con un deslizamiento corto: tengo que arrastrarla yo.
+   - La hoja se curva y sigue el dedo durante todo el recorrido. No pasa sola con un toque.
    - Si suelto antes de la mitad, la hoja regresa a su sitio. Pasada la mitad, termina de caer del otro lado.
+   - También pasa con un gesto rápido hacia el lado (lanzarla), aunque no llegue a la mitad.
    - Tiene sombra y se ve el reverso del papel.
 3. **Sonido de hoja real** al pasarla:
    - un roce mientras arrastro (más rápido, más fuerte);
@@ -102,7 +103,7 @@ Pantallas:
   - El avance y las frases van en IndexedDB.
 - **Hoja que se curva:** implementación propia en WebGL (por ejemplo con three.js). Es una malla que se dobla alrededor de un cilindro, con luz y sombra.
   - No se usa una librería de «page flip», para tener control total del gesto.
-  - La hoja sigue al dedo 1:1. Al soltar, la posición decide: antes de la mitad regresa; después, cae.
+  - La hoja sigue al dedo 1:1. Al soltar, la posición decide: antes de la mitad regresa; después, cae. Si se suelta en pleno gesto rápido hacia el otro lado, también cae.
   - Debe ir a 60 fps en un celular de gama media.
 - **Papel:** es una capa encima de la página dibujada, con `mix-blend-mode: multiply`. El blanco del PDF toma el color del papel y la tinta queda oscura.
   - Noche: invertir colores y dar un tono cálido.
@@ -117,7 +118,7 @@ Pantallas:
   - En modo lectura, el dedo pasa las hojas.
   - En modo resaltar o encerrar, el dedo marca y la hoja no se pasa (aviso arriba con «Listo» para salir).
   - Se pellizca para acercar. Con zoom, arriba y abajo mueve la página y a los lados la pasa (cuando ya se ve el borde del texto); el zoom se mantiene en la página siguiente.
-  - Doble toque: el texto a todo el ancho de la pantalla (se recortan los márgenes blancos, sin cortar el texto) o vuelve a la página entera.
+  - Doble toque: el texto a todo el ancho de la pantalla (se recortan los márgenes blancos, sin cortar el texto) o vuelve a la página entera. Un pellizco que queda cerca de ese ancho se acomoda justo en él.
   - Celular de lado: la página va a todo el ancho y se lee deslizando hacia abajo.
 - **PDFs escaneados (sin texto):** se leen igual. Lo que se resalte o encierre se guarda como recorte de imagen. El reconocimiento de texto (OCR) queda para más adelante.
 - **Celular:** una página a la vez.

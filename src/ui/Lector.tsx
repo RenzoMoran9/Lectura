@@ -619,24 +619,39 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           reencuadrar({ px: x, py: y }, true);
           return;
         }
-        // Sin zoom: el texto a todo el ancho de la pantalla. Si ya lo ocupa, se acerca al punto.
-        const e = d.modo === 'doble' ? null : encuadreDe(paginaRef.current);
-        if (e && zoomAlTexto(e, v) > 1.1) {
+        // Sin zoom: el texto a todo el ancho de la pantalla, sin cortar nada a los lados.
+        if (d.modo === 'doble') {
+          cambiarAjuste('libre');
+          ponerZoom(acercarEn(zoomRef.current, 2, x, y), true);
+          return;
+        }
+        const e = encuadreDe(paginaRef.current);
+        if (e && zoomAlTexto(e, v) > 1.03) {
           cambiarAjuste('texto');
           reencuadrar({ px: x, py: y }, true);
           setMensaje({ texto: 'Texto a todo el ancho · doble toque para volver', clave: Date.now() });
         } else {
-          cambiarAjuste('libre');
-          ponerZoom(acercarEn(zoomRef.current, 2.5, x, y), true);
+          setMensaje({
+            texto: v.w < v.h ? 'El texto ya ocupa todo el ancho · gira el celular para verlo más grande' : 'El texto ya ocupa todo el ancho',
+            clave: Date.now(),
+          });
         }
       },
       finPellizco: () => {
         const z = zoomRef.current;
+        const v = vistaTam();
+        if (!v) return;
+        const d = dispRef.current;
+        const e = d && d.modo !== 'doble' ? encuadreDe(paginaRef.current) : null;
+        const ajuste = e ? zoomAlTexto(e, v) : 1;
         if (z.z < 1.08) {
           cambiarAjuste('pagina');
-          const v = vistaTam();
-          ponerZoom(acercarEn(z, 1, (v?.w ?? 0) / 2, (v?.h ?? 0) / 2), true);
-        } else if (ajusteRef.current !== 'libre' || conZoom(z)) cambiarAjuste('libre');
+          ponerZoom(acercarEn(z, 1, v.w / 2, v.h / 2), true);
+        } else if (e && ajuste > 1.03 && z.z < ajuste * 1.45) {
+          // Cerca del ancho del texto: se acomoda justo ahí, sin cortar nada a los lados.
+          cambiarAjuste('texto');
+          reencuadrar({ px: v.w / 2, py: v.h / 2 }, true);
+        } else cambiarAjuste('libre');
       },
       finZoom: programarDetalle,
     });
@@ -1006,11 +1021,14 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         <button
           className="quitar-zoom"
           onClick={() => {
-            cambiarAjuste('pagina');
-            reencuadrar('arriba', true);
+            // Con el zoom cortando el texto, este botón lo deja justo a todo el ancho.
+            const v = vistaTam();
+            const e = disp?.modo !== 'doble' ? encuadreDe(paginaRef.current) : null;
+            cambiarAjuste(e && v && zoomAlTexto(e, v) > 1.03 ? 'texto' : 'pagina');
+            reencuadrar(v ? { px: v.w / 2, py: v.h / 2 } : 'arriba', true);
           }}
         >
-          Tamaño normal
+          {disp?.modo !== 'doble' ? 'Ajustar al texto' : 'Tamaño normal'}
         </button>
       )}
 

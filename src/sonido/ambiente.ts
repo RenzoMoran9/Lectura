@@ -17,17 +17,41 @@ export const AMBIENTES = [
 
 export type TipoAmbiente = (typeof AMBIENTES)[number]['id'];
 
-// Nivel de cada uno (RMS). La música y los tambores se dejan un poco más bajos que la naturaleza.
+// Nivel de cada uno: RMS de lo que se oye en el parlante de un celular (sin los graves, que ahí no
+// suenan). La música y los tambores se dejan un poco más bajos que la naturaleza.
 const NIVEL: Record<TipoAmbiente, number> = {
-  playa: 0.05,
-  bosque: 0.05,
-  lluvia: 0.045,
-  terror: 0.04,
+  playa: 0.045,
+  bosque: 0.04,
+  lluvia: 0.04,
+  terror: 0.035,
   suspenso: 0.035,
-  drama: 0.035,
-  accion: 0.03,
+  drama: 0.032,
+  accion: 0.028,
 };
 
+/** RMS sin los graves (dos filtros paso alto de un polo, a 300 Hz): cuánto se oye de verdad. */
+export function rmsAudible(d: Float32Array, sampleRate: number, desde = 0, hasta = d.length): number {
+  const rc = 1 / (2 * Math.PI * 300);
+  const a = rc / (rc + 1 / sampleRate);
+  let x1 = 0;
+  let y1 = 0;
+  let y2 = 0;
+  let z1 = 0;
+  let suma = 0;
+  for (let i = desde; i < hasta; i++) {
+    const x = d[i];
+    const y = a * (y1 + x - x1);
+    const z = a * (z1 + y - y2);
+    x1 = x;
+    y1 = y;
+    y2 = y;
+    z1 = z;
+    suma += z * z;
+  }
+  return Math.sqrt(suma / Math.max(1, hasta - desde));
+}
+
+const VERSION_SONIDOS = 2;
 const FUNDIDO = 3; // s de cruce entre una grabación y la otra
 const BORDE = 0.05; // s que se recortan (el MP3 trae un poco de silencio en los bordes)
 
@@ -36,12 +60,9 @@ function igualar(ctx: BaseAudioContext, b: AudioBuffer, nivel: number): AudioBuf
   const recorte = Math.floor(BORDE * b.sampleRate);
   const largo = b.length - 2 * recorte;
   let suma = 0;
-  for (let c = 0; c < b.numberOfChannels; c++) {
-    const d = b.getChannelData(c);
-    for (let i = recorte; i < recorte + largo; i++) suma += d[i] * d[i];
-  }
-  const rms = Math.sqrt(suma / (largo * b.numberOfChannels));
-  const g = rms > 1e-6 ? Math.min(20, nivel / rms) : 1;
+  for (let c = 0; c < b.numberOfChannels; c++) suma += rmsAudible(b.getChannelData(c), b.sampleRate, recorte, recorte + largo) ** 2;
+  const rms = Math.sqrt(suma / b.numberOfChannels);
+  const g = rms > 1e-6 ? Math.min(40, nivel / rms) : 1;
   const salida = ctx.createBuffer(2, largo, b.sampleRate);
   for (let c = 0; c < 2; c++) {
     const ent = b.getChannelData(Math.min(c, b.numberOfChannels - 1));
@@ -126,10 +147,14 @@ class Ambiente {
       entrada.ratio.value = 4;
       entrada.attack.value = 0.005;
       entrada.release.value = 0.3;
+      // Los graves más profundos no se oyen en el celular y solo le quitan espacio al resto.
+      const pasoAlto = ctx.createBiquadFilter();
+      pasoAlto.type = 'highpass';
+      pasoAlto.frequency.value = 60;
       const ganancia = ctx.createGain();
       ganancia.gain.value = this.nivel();
-      entrada.connect(ganancia).connect(ctx.destination);
-      this.salida = { entrada, ganancia };
+      pasoAlto.connect(entrada).connect(ganancia).connect(ctx.destination);
+      this.salida = { entrada: pasoAlto, ganancia };
     }
     return this.salida.entrada;
   }
@@ -138,7 +163,8 @@ class Ambiente {
     let p = this.bucles.get(tipo);
     if (!p) {
       const traer = async (n: number) => {
-        const r = await fetch(`${import.meta.env.BASE_URL}ambiente/${tipo}-${n}.mp3`);
+        // `v`: cambia cuando se rehacen las grabaciones (la app guarda las que ya usó).
+        const r = await fetch(`${import.meta.env.BASE_URL}ambiente/${tipo}-${n}.mp3?v=${VERSION_SONIDOS}`);
         if (!r.ok) throw new Error(`Falta el sonido ${tipo}-${n}`);
         return igualar(ctx, await ctx.decodeAudioData(await r.arrayBuffer()), NIVEL[tipo]);
       };

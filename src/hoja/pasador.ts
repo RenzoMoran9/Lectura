@@ -2,8 +2,8 @@
 //  - Hacia adelante, el punto que tomaste de la hoja va pegado a tu dedo.
 //  - Hacia atrás, la hoja anterior vuelve desde el lomo y su doblez sigue a tu dedo. En doble
 //    página se toma la hoja izquierda y también va pegada al dedo.
-//  - Al soltar solo cuenta la posición: antes de la mitad regresa, pasada la mitad cae.
-//    Un toque o un deslizamiento rápido y corto no pasan la hoja.
+//  - Al soltar: pasada la mitad, cae; antes de la mitad regresa, salvo que la hayas lanzado con un
+//    gesto rápido hacia el otro lado (como quien pasa la hoja de un golpe). Un toque no la pasa.
 
 import {
   avance,
@@ -39,6 +39,9 @@ export interface OpcionesPasador {
 type Fase = 'quieto' | 'esperando' | 'arrastrando' | 'ignorado' | 'animando';
 
 const UMBRAL = 7; // px antes de decidir si el dedo quiere pasar la hoja
+/** Un gesto rápido pasa la hoja aunque no llegue a la mitad: px/ms hacia el otro lado y recorrido mínimo. */
+const LANZAR_VELOCIDAD = 0.45;
+const LANZAR_RECORRIDO = 28;
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -115,10 +118,22 @@ export class Pasador {
     }
     if (this.fase !== 'arrastrando') return;
     const progreso = avance(this.sentido, this.P, this.F, this.o.doble?.());
-    const pasa = pasaLaHoja(progreso);
+    const pasa = pasaLaHoja(progreso) || this.lanzada(x);
     const pasada = posicionPasada(this.P);
     const destino = this.sentido === 'adelante' ? (pasa ? pasada : this.P) : pasa ? this.P : pasada;
     this.animar(destino, pasa);
+  }
+
+  /**
+   * ¿Se soltó la hoja en pleno gesto rápido hacia el otro lado? (el dedo seguía moviéndose y ya
+   * había recorrido un poco). Hacia adelante el dedo va a la izquierda; hacia atrás, a la derecha.
+   */
+  private lanzada(x: number) {
+    const reciente = performance.now() - this.ultimo.t < 90;
+    const vx = this.velocidad.x;
+    const recorrido = Math.abs(x - this.inicio.x);
+    if (!reciente || recorrido < LANZAR_RECORRIDO) return false;
+    return this.sentido === 'adelante' ? vx < -LANZAR_VELOCIDAD : vx > LANZAR_VELOCIDAD;
   }
 
   /** Si el sistema interrumpe el gesto (llamada, cambio de app…), la hoja vuelve a su sitio. */

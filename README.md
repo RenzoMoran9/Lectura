@@ -61,7 +61,9 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
 - **Zoom** (`src/hoja/gestos.ts`, `src/hoja/zoom.ts`): pellizco con dos dedos; con zoom, arriba y abajo mueve la
   página (con impulso) y a los lados la pasa cuando ya se ve el borde del texto (si no, primero lo muestra). El zoom se
   mantiene al pasar: la página nueva empieza arriba (o abajo, al volver). **Doble toque**: el texto a todo el ancho
-  (`src/pdf/contenido.ts` mide dónde está lo impreso en cada página, sin tocar el PDF) o vuelve a la página entera.
+  (`src/pdf/contenido.ts` mide dónde está lo impreso en cada página, sin tocar el PDF; un pie de página o una dirección
+  web que se sale del bloque no cuenta) o vuelve a la página entera. Un pellizco cerca de ese ancho se acomoda en él.
+  **Pasar con un gesto**: además de arrastrarla, la hoja pasa si se lanza con un gesto rápido.
   **Celular de lado**: la página va a todo el ancho y se lee deslizando. En la PC, Ctrl + rueda (hacia el puntero),
   la rueda sola mueve, y Ctrl + / − / 0. Al quedarse quieto, lo visible se vuelve a dibujar nítido.
 - **Sonido de fondo** (`src/sonido/ambiente.ts`): en «Papel y sonido», para relajarse (playa, bosque y fogata, lluvia)
