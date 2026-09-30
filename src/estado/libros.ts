@@ -6,7 +6,10 @@ import { guardarLibro, listarAvances, listarLibros, obtenerLibro, type Avance, t
 import { abrirPdf, cerrarPdf, PdfConClave, PdfDanado, tituloDelPdf } from '../pdf/pdf';
 import { dibujarPortada } from '../pdf/paginas';
 
-export type Vista = { pantalla: 'inicio' } | { pantalla: 'lector'; libroId: string };
+export type Vista =
+  | { pantalla: 'inicio' }
+  | { pantalla: 'lector'; libroId: string; pagina?: number; vez?: number; desde?: 'inicio' | 'frases' }
+  | { pantalla: 'frases'; libroId?: string };
 
 export interface Subida {
   nombre: string;
@@ -23,7 +26,8 @@ interface EstadoLibros {
   subida: Subida | null;
   error: string | null;
   cargar: () => Promise<void>;
-  abrir: (libroId: string) => void;
+  abrir: (libroId: string, pagina?: number) => void;
+  verFrases: (libroId?: string) => void;
   volver: () => void;
   subir: (archivo: File) => Promise<void>;
   quitar: (libro: Libro) => Promise<void>;
@@ -31,14 +35,32 @@ interface EstadoLibros {
   limpiarError: () => void;
 }
 
+// Cada pantalla deja una entrada en el historial: el botón «atrás» del celular vuelve a la anterior.
+interface EntradaHistorial {
+  vista: Vista;
+  prof: number;
+}
+const entradaActual = () => (history.state as EntradaHistorial | null)?.vista ? (history.state as EntradaHistorial) : null;
+
 if (typeof window !== 'undefined') {
-  window.addEventListener('popstate', () => {
-    if (useLibros.getState().vista.pantalla === 'lector') useLibros.setState({ vista: { pantalla: 'inicio' } });
+  if (!entradaActual()) history.replaceState({ vista: { pantalla: 'inicio' }, prof: 0 } satisfies EntradaHistorial, '');
+  window.addEventListener('popstate', (e) => {
+    const entrada = e.state as EntradaHistorial | null;
+    useLibros.setState({ vista: entrada?.vista ?? { pantalla: 'inicio' } });
   });
 }
 
+function ir(vista: Vista) {
+  const prof = (entradaActual()?.prof ?? 0) + 1;
+  history.pushState({ vista, prof } satisfies EntradaHistorial, '');
+  useLibros.setState({ vista });
+}
+
+let vez = 0;
+
 export const useLibros = create<EstadoLibros>()((set, get) => ({
-  vista: { pantalla: 'inicio' },
+  // Al recargar la página se vuelve a la pantalla en la que estabas.
+  vista: (typeof window !== 'undefined' && entradaActual()?.vista) || { pantalla: 'inicio' },
   libros: [],
   avances: {},
   cargado: false,
@@ -50,13 +72,11 @@ export const useLibros = create<EstadoLibros>()((set, get) => ({
     set({ libros, avances: Object.fromEntries(avances.map((a) => [a.libroId, a])), cargado: true });
   },
 
-  // Abrir un libro deja una entrada en el historial: el botón «atrás» del celular vuelve al estante.
-  abrir: (libroId) => {
-    history.pushState({ lector: libroId }, '');
-    set({ vista: { pantalla: 'lector', libroId } });
-  },
+  abrir: (libroId, pagina) =>
+    ir({ pantalla: 'lector', libroId, pagina, vez: ++vez, desde: get().vista.pantalla === 'frases' ? 'frases' : 'inicio' }),
+  verFrases: (libroId) => ir({ pantalla: 'frases', libroId }),
   volver: () => {
-    if (history.state?.lector) history.back();
+    if ((entradaActual()?.prof ?? 0) > 0) history.back();
     else set({ vista: { pantalla: 'inicio' } });
   },
   limpiarError: () => set({ error: null }),

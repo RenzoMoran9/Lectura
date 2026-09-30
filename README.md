@@ -12,7 +12,7 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
 | --- | --- | --- |
 | 0 | Propuesta visual (maqueta e imágenes) | ✅ hecha |
 | 1 | Subir PDF, pasar la hoja con el dedo (curva + sonido), 4 papeles, recordar la página | ✅ hecha |
-| 2 | Menú de la esquina: resaltador, lápiz para encerrar, borrador y «Mis frases» | ⏳ |
+| 2 | Menú de la esquina: resaltador, lápiz para encerrar, borrador y «Mis frases» | ✅ hecha |
 | 3 | Estante con varios libros, doble página en la PC, instalar en el celular, sin internet | ⏳ |
 | 4 | Inicio de sesión y sincronización entre celular y PC (Supabase) | ⏳ |
 
@@ -34,13 +34,27 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   invierte la luz con un tono cálido. El PDF nunca se modifica.
 - **Recordar la página**: el avance de cada libro se guarda en IndexedDB y el libro se abre ahí.
 
+## Etapa 2: cómo funciona
+
+- **Menú de la esquina** (`src/ui/MenuEsquina.tsx`): botón chico y semitransparente; se arrastra a cualquier borde
+  y recuerda dónde quedó. Se abre en abanico hacia adentro con resaltador (5 colores), lápiz (grafito o rojo),
+  borrador, papel y Mis frases. Con una herramienta activa aparece arriba «Resaltando · la hoja no se pasa · Listo».
+- **Resaltar** (`src/frases/`): se lee la capa de texto de PDF.js y se calcula la caja de cada letra; al arrastrar,
+  la selección se ajusta a palabras completas, aunque ocupe varios renglones (y quita el guion de las palabras cortadas).
+- **Encerrar a lápiz**: el círculo se dibuja a mano y queda tal cual; se guardan las palabras que quedaron dentro.
+- **Escaneados**: sin texto, el resaltador deja una banda a mano y la frase se guarda como recorte de la página.
+- **Las marcas van en el papel**: se dibujan en una capa blanca que el shader multiplica con la página, así se curvan
+  con la hoja, se ven en su reverso y funcionan en los 4 papeles (en «noche» se invierten con la página).
+- **Borrador** con «Deshacer». **Mis frases** (IndexedDB): texto, libro, página, fecha y color; buscador, filtros por
+  libro y color, «Ir a la página» y «Repasar» (frases al azar). Si quitas un libro, sus frases se conservan.
+
 ## Desarrollo
 
 ```bash
 npm install
 npm run dev        # http://localhost:5173/Lectura/
 npm run typecheck  # tipos
-npm test           # pruebas (geometría de la hoja y disposición)
+npm test           # pruebas (geometría de la hoja, del texto y de las marcas)
 npm run build      # compila en dist/
 ```
 
@@ -61,7 +75,7 @@ La maqueta es `diseno/propuesta-visual.html` (ábrela en el navegador). Para vol
 ## Licencias de terceros
 
 - Fuentes EB Garamond, Fraunces, DM Sans y Caveat (`diseno/fuentes/`): SIL Open Font License 1.1, vía Fontsource.
-- Íconos de [Lucide](https://lucide.dev) (`diseno/iconos.js`): licencia ISC.
+- Íconos de [Lucide](https://lucide.dev) (`diseno/iconos.js`, `src/ui/Icono.tsx`): licencia ISC. El ícono «encerrar» es propio.
 - Texto de muestra: *Don Quijote de la Mancha*, Miguel de Cervantes (1605), dominio público.
 - [PDF.js](https://github.com/mozilla/pdf.js) (`pdfjs-dist`): Apache-2.0. Sus recursos (mapas de caracteres,
   fuentes estándar, módulos wasm) se publican en `pdfjs/` con sus licencias.

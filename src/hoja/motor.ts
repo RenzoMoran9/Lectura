@@ -35,6 +35,9 @@ export class MotorHoja {
   private nIndices = 0;
   private texPaginas = new Map<number, WebGLTexture>();
   private fuentes = new Map<number, TexImageSource>();
+  /** Marcas (resaltador y lápiz) de cada página: se multiplican con ella en el shader. */
+  private texMarcas = new Map<number, WebGLTexture>();
+  private fuentesMarcas = new Map<number, TexImageSource>();
   private texPapel: WebGLTexture | null = null;
   private texBlanca: WebGLTexture | null = null;
   private papel: TipoPapel = 'crema';
@@ -60,6 +63,7 @@ export class MotorHoja {
       this.iniciar();
       void this.ponerPapel(this.papel);
       for (const [i, fuente] of this.fuentes) this.subirPagina(i, fuente);
+      for (const [i, fuente] of this.fuentesMarcas) this.subirMarcas(i, fuente);
       this.pedirDibujo();
     });
     this.iniciar();
@@ -73,6 +77,7 @@ export class MotorHoja {
     if (!gl) throw new Error('Este navegador no puede dibujar la hoja (falta WebGL).');
     this.gl = gl;
     this.texPaginas.clear();
+    this.texMarcas.clear();
 
     const compilar = (tipo: number, fuente: string) => {
       const s = gl.createShader(tipo)!;
@@ -90,11 +95,12 @@ export class MotorHoja {
     this.prog = prog;
     gl.useProgram(prog);
     for (const nombre of ['uTam', 'uOrigen', 'uVista', 'uN', 'uA', 'uR', 'uDoblar', 'uZ', 'uPagina', 'uPapel', 'uTipo',
-      'uFondoNoche', 'uTintaNoche', 'uSombra', 'uDoblando', 'uLuz']) {
+      'uFondoNoche', 'uTintaNoche', 'uSombra', 'uDoblando', 'uLuz', 'uMarcas']) {
       this.u[nombre] = gl.getUniformLocation(prog, nombre);
     }
     gl.uniform1i(this.u.uPagina, 0);
     gl.uniform1i(this.u.uPapel, 1);
+    gl.uniform1i(this.u.uMarcas, 2);
     gl.uniform3fv(this.u.uLuz, LUZ);
     gl.uniform3fv(this.u.uFondoNoche, hexRgb(PAPELES.noche.color));
     gl.uniform3fv(this.u.uTintaNoche, hexRgb(PAPELES.noche.tinta));
@@ -220,6 +226,29 @@ export class MotorHoja {
     if (indice === this.escena.hoja || indice === this.escena.debajo) this.pedirDibujo();
   }
 
+  /** Marcas de una página (lienzo blanco con las marcas multiplicadas), o null si no tiene. */
+  subirMarcas(indice: number, fuente: TexImageSource | null) {
+    const gl = this.gl;
+    if (!fuente) {
+      const t = this.texMarcas.get(indice);
+      if (t && !this.perdido) gl.deleteTexture(t);
+      this.texMarcas.delete(indice);
+      this.fuentesMarcas.delete(indice);
+    } else {
+      this.fuentesMarcas.set(indice, fuente);
+      if (this.perdido) return;
+      let t = this.texMarcas.get(indice);
+      if (!t) {
+        t = this.crearTextura();
+        this.texMarcas.set(indice, t);
+      } else gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, fuente);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    }
+    if (indice === this.escena.hoja || indice === this.escena.debajo) this.pedirDibujo();
+  }
+
   tienePagina(indice: number) {
     return this.texPaginas.has(indice);
   }
@@ -229,6 +258,7 @@ export class MotorHoja {
     if (t && !this.perdido) this.gl.deleteTexture(t);
     this.texPaginas.delete(indice);
     this.fuentes.delete(indice);
+    this.subirMarcas(indice, null);
   }
 
   soltarTodas() {
@@ -280,6 +310,8 @@ export class MotorHoja {
     gl.uniform1f(this.u.uDoblando, doblez ? 1 : 0);
 
     const pintar = (indice: number | null, doblar: boolean, z: number) => {
+      gl.activeTexture(gl.TEXTURE2);
+      gl.bindTexture(gl.TEXTURE_2D, (indice !== null && this.texMarcas.get(indice)) || this.texBlanca);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, (indice !== null && this.texPaginas.get(indice)) || this.texBlanca);
       gl.uniform1f(this.u.uDoblar, doblar ? 1 : 0);

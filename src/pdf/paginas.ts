@@ -17,6 +17,17 @@ export interface Maqueta {
 
 const TINTA_TENUE = 'rgba(42, 37, 32, 0.46)';
 
+export interface Ubicacion {
+  /** Esquina de la página del PDF dentro de la hoja, en px CSS. */
+  x: number;
+  y: number;
+  /** px CSS por unidad de la página (punto PDF). */
+  escala: number;
+  /** Tamaño de la página en unidades de la página. */
+  ancho: number;
+  alto: number;
+}
+
 export class Paginas {
   private listas = new Map<number, HTMLCanvasElement>();
   private deseadas: number[] = [];
@@ -56,6 +67,11 @@ export class Paginas {
     return this.listas.get(indice);
   }
 
+  /** Páginas que ya están dibujadas. */
+  indices() {
+    return [...this.listas.keys()];
+  }
+
   /** Páginas que se quieren tener listas, en orden de prioridad. */
   pedir(indices: number[]) {
     this.deseadas = indices.filter((i) => i >= 0 && i < this.total);
@@ -73,6 +89,18 @@ export class Paginas {
   }
 
   private versionDe = new Map<number, number>();
+  private ubicaciones = new Map<number, Ubicacion>();
+
+  /** Dónde quedó la página del PDF dentro de la hoja (px CSS) y a qué escala. */
+  ubicacion(indice: number): Ubicacion | undefined {
+    return this.ubicaciones.get(indice);
+  }
+
+  /** Tamaño del lienzo de cada página (px del dispositivo) y su densidad. */
+  get lienzoTam() {
+    const m = this.maqueta;
+    return m ? { ancho: Math.round(m.ancho * m.dpr), alto: Math.round(m.alto * m.dpr), dpr: m.dpr } : null;
+  }
 
   private siguiente() {
     if (this.enCurso || !this.maqueta) return;
@@ -118,6 +146,7 @@ export class Paginas {
       this.cabecera(ctx, m, indice, y, y + altoPag);
       pagina.cleanup();
       if (version !== this.version || !this.deseadas.includes(indice)) return;
+      this.ubicaciones.set(indice, { x, y, escala, ancho: base.width, alto: base.height });
       this.listas.set(indice, lienzo);
       this.versionDe.set(indice, version);
       this.onLista?.(indice, lienzo);

@@ -56,6 +56,7 @@ export const FRAGMENTOS = /* glsl */ `
 precision highp float;
 uniform sampler2D uPagina;
 uniform sampler2D uPapel;
+uniform sampler2D uMarcas;  // resaltador y lápiz, sobre blanco: se multiplican con la página
 uniform vec2 uTam;
 uniform float uTipo;        // 0 blanco, 1 crema, 2 antiguo, 3 noche
 uniform vec3 uFondoNoche;
@@ -119,7 +120,8 @@ vec3 conTinta(vec3 pap, vec3 pdf, float fuerza) {
 void main() {
   vec2 p = vUv * uTam;
   vec3 pap = papel(p, vUv);
-  vec3 pdf = texture2D(uPagina, vUv).rgb;
+  // Las marcas van antes del papel: así en «noche» también se invierten y siguen viéndose.
+  vec3 pdf = texture2D(uPagina, vUv).rgb * texture2D(uMarcas, vUv).rgb;
   bool reverso = uDoblar > 0.5 && !gl_FrontFacing;
   vec3 col;
   if (reverso) {

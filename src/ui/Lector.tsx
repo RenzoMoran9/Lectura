@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { leerArchivo } from '../datos/archivos';
 import { guardarAvance, leerAvance, obtenerLibro, type Avance, type Libro } from '../datos/bd';
 import { useAjustes } from '../estado/ajustes';
+import { useFrases } from '../estado/frases';
 import { useLibros } from '../estado/libros';
+import { dibujarFrase, lienzoDeMarcas } from '../frases/dibujo';
+import { Marcador, type Previa } from '../frases/marcador';
+import type { Frase } from '../frases/modelo';
+import { leerTextoPagina, type TextoPagina } from '../frases/texto';
 import type { Sentido } from '../hoja/geometria';
 import { densidad, disponer, type Disposicion, type Margenes } from '../hoja/maqueta';
 import { MotorHoja } from '../hoja/motor';
@@ -12,7 +17,9 @@ import { Pasador, type Pase } from '../hoja/pasador';
 import { abrirPdf, bytesLeidos, cerrarPdf, type DocumentoPdf } from '../pdf/pdf';
 import { Paginas } from '../pdf/paginas';
 import { sonido } from '../sonido/sonido';
+import { AvisoBreve, AvisoModo, type Mensaje } from './Avisos';
 import { Icono } from './Icono';
+import { MenuEsquina } from './MenuEsquina';
 import { PapelYSonido } from './PapelYSonido';
 
 const miles = (n: number) => n.toLocaleString('es');
@@ -31,10 +38,12 @@ function margenesSeguros(sonda: HTMLElement | null): Margenes {
   return { arriba: n(e.paddingTop), abajo: n(e.paddingBottom), izquierda: n(e.paddingLeft), derecha: n(e.paddingRight) };
 }
 
-export function Lector({ libroId }: { libroId: string }) {
+export function Lector({ libroId, paginaPedida, desde }: { libroId: string; paginaPedida?: number; desde?: 'inicio' | 'frases' }) {
   const volver = useLibros((s) => s.volver);
+  const verFrases = useLibros((s) => s.verFrases);
   const anotarAvance = useLibros((s) => s.anotarAvance);
   const papel = useAjustes((s) => s.papel);
+  const herramienta = useFrases((s) => s.herramienta);
 
   const contenedor = useRef<HTMLDivElement>(null);
   const lienzo = useRef<HTMLCanvasElement>(null);
@@ -49,6 +58,12 @@ export function Lector({ libroId }: { libroId: string }) {
   const [panel, setPanel] = useState(false);
   const [dibujada, setDibujada] = useState(false);
   const [saltoA, setSaltoA] = useState<number | null>(null);
+  const [mensaje, setMensaje] = useState<Mensaje | null>(null);
+  const cerrarMensaje = useCallback(() => setMensaje(null), []);
+  const lienzoPrevia = useRef<HTMLCanvasElement>(null);
+  const marcador = useRef<Marcador | null>(null);
+  const textos = useRef(new Map<number, TextoPagina | 'leyendo'>());
+  const borradasGesto = useRef<Frase[]>([]);
 
   const motor = useRef<MotorHoja | null>(null);
   const paginas = useRef<Paginas | null>(null);
@@ -74,7 +89,7 @@ export function Lector({ libroId }: { libroId: string }) {
       docActual.current = d;
       const av = await leerAvance(l.id);
       if (!vivo) return;
-      const inicial = Math.max(0, Math.min(d.numPages - 1, av?.pagina ?? 0));
+      const inicial = Math.max(0, Math.min(d.numPages - 1, paginaPedida ?? av?.pagina ?? 0));
       paginaRef.current = inicial;
       setLibro(l);
       setDoc(d);
@@ -121,11 +136,80 @@ export function Lector({ libroId }: { libroId: string }) {
 
     const pags = new Paginas(doc);
     paginas.current = pags;
+
+    // Marcas de cada página: un lienzo blanco con sus frases, que el shader multiplica con la página.
+    const lienzosMarcas = new Map<number, HTMLCanvasElement>();
+    const pintarMarcas = (i: number) => {
+      const ub = pags.ubicacion(i);
+      const tam = pags.lienzoTam;
+      if (!ub || !tam) return;
+      const fs = useFrases.getState().frases.filter((f) => f.libroId === libro.id && f.pagina === i);
+      if (!fs.length) {
+        lienzosMarcas.delete(i);
+        m.subirMarcas(i, null);
+        return;
+      }
+      const c = lienzoDeMarcas(tam.ancho, tam.alto, fs, { x: ub.x, y: ub.y, escala: ub.escala, dpr: tam.dpr }, lienzosMarcas.get(i));
+      lienzosMarcas.set(i, c);
+      m.subirMarcas(i, c);
+    };
+    const dejarDeEscuchar = useFrases.subscribe((ahora, antes) => {
+      if (ahora.frases !== antes.frases) pags.indices().forEach(pintarMarcas);
+    });
+
     pags.onLista = (i, c) => {
       m.subirPagina(i, c);
+      pintarMarcas(i);
       if (i === paginaRef.current) setDibujada(true);
     };
-    pags.onSoltada = (i) => m.soltarPagina(i);
+    pags.onSoltada = (i) => {
+      lienzosMarcas.delete(i);
+      m.soltarPagina(i);
+    };
+
+    marcador.current = new Marcador({
+      herramienta: () => useFrases.getState().herramienta,
+      color: () => {
+        const a = useAjustes.getState();
+        return useFrases.getState().herramienta === 'lapiz' ? a.colorLapiz : a.colorResaltador;
+      },
+      libroId: () => libro.id,
+      pagina: () => paginaRef.current,
+      ubicacion: () => pags.ubicacion(paginaRef.current),
+      texto: () => {
+        const t = textos.current.get(paginaRef.current);
+        return t && t !== 'leyendo' ? t : null;
+      },
+      lienzoPagina: () => {
+        const lienzo = pags.obtener(paginaRef.current);
+        const tam = pags.lienzoTam;
+        return lienzo && tam ? { lienzo, dpr: tam.dpr } : undefined;
+      },
+      frasesPagina: () => useFrases.getState().frases.filter((f) => f.libroId === libro.id && f.pagina === paginaRef.current),
+      previa: (p) => dibujarPrevia(p),
+      guardar: (f, donde) => {
+        void useFrases.getState().agregar({ ...f, libroTitulo: libro.titulo });
+        // La marca ya quedó en la página: la vista previa se borra en cuanto se dibuja.
+        requestAnimationFrame(() => requestAnimationFrame(() => dibujarPrevia(null)));
+        const r = contenedor.current?.getBoundingClientRect();
+        const h = dispRef.current?.hoja;
+        setMensaje({ texto: 'Guardada en Mis frases', x: (r?.left ?? 0) + (h?.x ?? 0) + donde.x, y: (r?.top ?? 0) + (h?.y ?? 0) + donde.y, clave: Date.now() });
+      },
+      borrar: (ids) => {
+        void useFrases
+          .getState()
+          .quitar(ids)
+          .then((quitadas) => {
+            borradasGesto.current.push(...quitadas);
+            const deshacer = [...borradasGesto.current];
+            setMensaje({
+              texto: deshacer.length > 1 ? `${deshacer.length} marcas borradas` : 'Marca borrada',
+              deshacer: () => void useFrases.getState().restaurar(deshacer),
+              clave: Date.now(),
+            });
+          });
+      },
+    });
 
     const quieta = () => m.poner({ hoja: paginaRef.current, debajo: null, doblez: null, sombra: 0 });
 
@@ -153,7 +237,7 @@ export function Lector({ libroId }: { libroId: string }) {
         }
         quieta();
       },
-      alTocar: () => setCromo((c) => !c),
+      alTocar: () => !useFrases.getState().herramienta && setCromo((c) => !c),
       alEmpezar: () => {
         setCromo(false);
         sonido.empezarRoce();
@@ -168,6 +252,8 @@ export function Lector({ libroId }: { libroId: string }) {
     quieta();
 
     return () => {
+      dejarDeEscuchar();
+      marcador.current = null;
       p.destruir();
       pags.destruir();
       m.destruir();
@@ -198,6 +284,7 @@ export function Lector({ libroId }: { libroId: string }) {
       dispRef.current = d;
       setDisp(d);
       pasador.current?.cancelar();
+      marcador.current?.cancelar();
       motor.current?.medir(w, h, dpr, d.hoja, d.modo === 'mesa');
       paginas.current?.configurar({ ancho: d.hoja.w, alto: d.hoja.h, dpr, caja: d.caja, titulo: libro.titulo });
     };
@@ -245,6 +332,50 @@ export function Lector({ libroId }: { libroId: string }) {
     void motor.current?.ponerPapel(papel);
   }, [papel]);
 
+  // Con el resaltador o el lápiz se lee la capa de texto de la página (una vez por página).
+  useEffect(() => {
+    const d = docActual.current;
+    if (pagina === null || !d || (herramienta !== 'resaltador' && herramienta !== 'lapiz')) return;
+    const cache = textos.current;
+    if (cache.has(pagina)) return;
+    cache.set(pagina, 'leyendo');
+    d.getPage(pagina + 1)
+      .then(leerTextoPagina)
+      .then((t) => cache.set(pagina, t))
+      .catch(() => cache.delete(pagina));
+    // Solo se guardan unas pocas páginas.
+    if (cache.size > 12) cache.delete(cache.keys().next().value!);
+  }, [pagina, herramienta, doc]);
+
+  useEffect(() => {
+    if (herramienta) setCromo(false);
+    marcador.current?.cancelar();
+  }, [herramienta]);
+
+  // Al salir del libro se vuelve a leer: la próxima vez el dedo pasa la hoja.
+  useEffect(() => () => useFrases.getState().usar(null), []);
+
+  /** Vista previa de la marca mientras el dedo la hace (encima de la hoja). */
+  const dibujarPrevia = useCallback((p: Previa) => {
+    const c = lienzoPrevia.current;
+    const pags = paginas.current;
+    const h = dispRef.current?.hoja;
+    if (!c || !pags || !h) return;
+    const tam = pags.lienzoTam;
+    const ub = pags.ubicacion(paginaRef.current);
+    if (!tam || !ub) return;
+    if (c.width !== tam.ancho || c.height !== tam.alto) {
+      c.width = tam.ancho;
+      c.height = tam.alto;
+    }
+    const ctx = c.getContext('2d')!;
+    ctx.clearRect(0, 0, c.width, c.height);
+    if (!p) return;
+    ctx.globalCompositeOperation = 'multiply';
+    dibujarFrase(ctx, { id: 'previa', ...p }, { x: ub.x, y: ub.y, escala: ub.escala, dpr: tam.dpr });
+    ctx.globalCompositeOperation = 'source-over';
+  }, []);
+
   // 5. Teclado: ← → (y avance de página) pasan la hoja con el mismo sonido.
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
@@ -267,9 +398,25 @@ export function Lector({ libroId }: { libroId: string }) {
     return { x: e.clientX - r.left - h.x, y: h.y + h.h - (e.clientY - r.top) };
   }, []);
 
+  // Coordenadas para marcar: origen arriba a la izquierda de la hoja.
+  const aHojaArriba = useCallback((e: React.PointerEvent) => {
+    const r = contenedor.current!.getBoundingClientRect();
+    const h = dispRef.current?.hoja ?? { x: 0, y: 0 };
+    return { x: e.clientX - r.left - h.x, y: e.clientY - r.top - h.y };
+  }, []);
+
   const bajar = (e: React.PointerEvent) => {
     if (e.button !== 0 || !pasador.current) return;
     sonido.despertar();
+    if (useFrases.getState().herramienta && marcador.current) {
+      // Con una herramienta, el dedo marca y la hoja no se pasa.
+      if (pasador.current.ocupado) return;
+      borradasGesto.current = [];
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      const q = aHojaArriba(e);
+      marcador.current.bajar(q.x, q.y, e.pointerId);
+      return;
+    }
     const p = aHoja(e);
     const h = dispRef.current?.hoja;
     // En pantalla ancha solo se toma la hoja (con un poco de margen a la derecha).
@@ -281,16 +428,24 @@ export function Lector({ libroId }: { libroId: string }) {
     pasador.current.bajar(p.x, p.y, e.pointerId);
   };
   const mover = (e: React.PointerEvent) => {
+    if (useFrases.getState().herramienta) {
+      const q = aHojaArriba(e);
+      return marcador.current?.mover(q.x, q.y, e.pointerId);
+    }
     const p = aHoja(e);
     pasador.current?.mover(p.x, p.y, e.pointerId);
   };
   const subir = (e: React.PointerEvent) => {
     // En el celular el navegador solo deja encender el audio al levantar el dedo.
     sonido.despertar();
+    marcador.current?.subir(e.pointerId);
     const p = aHoja(e);
     pasador.current?.subir(p.x, p.y, e.pointerId);
   };
-  const cancelar = () => pasador.current?.cancelar();
+  const cancelar = () => {
+    marcador.current?.cancelar();
+    pasador.current?.cancelar();
+  };
 
   const irA = (n: number) => {
     if (!doc) return;
@@ -322,6 +477,13 @@ export function Lector({ libroId }: { libroId: string }) {
           <div className="sombra-hoja" style={{ left: disp.hoja.x, top: disp.hoja.y, width: disp.hoja.w, height: disp.hoja.h }} />
         )}
         <canvas ref={lienzo} className="lienzo-hoja" />
+        {disp && (
+          <canvas
+            ref={lienzoPrevia}
+            className={`lienzo-previa ${noche ? 'en-noche' : ''}`}
+            style={{ left: disp.hoja.x, top: disp.hoja.y, width: disp.hoja.w, height: disp.hoja.h }}
+          />
+        )}
         {!error && (!doc || !dibujada) && <div className={`cargando ${noche ? 'claro' : ''}`}>{doc ? 'Dibujando la página…' : 'Abriendo el libro…'}</div>}
       </div>
 
@@ -336,7 +498,7 @@ export function Lector({ libroId }: { libroId: string }) {
 
       <div className={`cromo-arriba ${cromo ? 'visible' : ''}`}>
         <button className="volver" onClick={volver}>
-          <Icono nombre="chevron-left" tam={20} /> Estante
+          <Icono nombre="chevron-left" tam={20} /> {desde === 'frases' ? 'Mis frases' : 'Estante'}
         </button>
         <div className="cromo-titulo">{libro?.titulo}</div>
       </div>
@@ -364,9 +526,12 @@ export function Lector({ libroId }: { libroId: string }) {
         <span className="cromo-pag">de {miles(total)}</span>
       </div>
 
-      <button className="boton-esquina" onClick={() => setPanel(true)} aria-label="Papel y sonido">
-        <Icono nombre="file" tam={21} />
-      </button>
+      <AvisoModo />
+      <AvisoBreve mensaje={mensaje} alCerrar={cerrarMensaje} />
+
+      {doc && (
+        <MenuEsquina alPapel={() => setPanel(true)} alFrases={() => verFrases(libroId)} alAbrir={() => setCromo(false)} />
+      )}
 
       {panel && <PapelYSonido alCerrar={() => setPanel(false)} />}
     </div>

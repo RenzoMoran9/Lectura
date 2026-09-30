@@ -2,6 +2,7 @@
 // OPFS, también los archivos PDF tal cual.
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import type { Frase } from '../frases/modelo';
 
 export type Almacen = 'opfs' | 'idb';
 
@@ -28,17 +29,24 @@ interface Esquema extends DBSchema {
   libros: { key: string; value: Libro };
   avance: { key: string; value: Avance; indexes: { porFecha: number } };
   archivos: { key: string; value: Blob };
+  frases: { key: string; value: Frase; indexes: { porLibro: string } };
 }
 
 let conexion: Promise<IDBPDatabase<Esquema>> | null = null;
 
 export function bd() {
-  conexion ??= openDB<Esquema>('entre-hojas', 1, {
-    upgrade(db) {
-      db.createObjectStore('libros', { keyPath: 'id' });
-      const avance = db.createObjectStore('avance', { keyPath: 'libroId' });
-      avance.createIndex('porFecha', 'actualizado');
-      db.createObjectStore('archivos');
+  conexion ??= openDB<Esquema>('entre-hojas', 2, {
+    upgrade(db, antes) {
+      if (antes < 1) {
+        db.createObjectStore('libros', { keyPath: 'id' });
+        const avance = db.createObjectStore('avance', { keyPath: 'libroId' });
+        avance.createIndex('porFecha', 'actualizado');
+        db.createObjectStore('archivos');
+      }
+      if (antes < 2) {
+        const frases = db.createObjectStore('frases', { keyPath: 'id' });
+        frases.createIndex('porLibro', 'libroId');
+      }
     },
   });
   return conexion;
@@ -56,6 +64,7 @@ export async function guardarLibro(libro: Libro) {
   await (await bd()).put('libros', libro);
 }
 
+/** Quita el libro del estante. Sus frases se conservan: si vuelves a subir el mismo PDF, reaparecen. */
 export async function borrarLibro(id: string) {
   const db = await bd();
   const tx = db.transaction(['libros', 'avance', 'archivos'], 'readwrite');
@@ -80,4 +89,18 @@ export async function guardarArchivoIdb(id: string, archivo: Blob) {
 
 export async function leerArchivoIdb(id: string) {
   return (await bd()).get('archivos', id);
+}
+
+export async function listarFrases(): Promise<Frase[]> {
+  return (await bd()).getAll('frases');
+}
+
+export async function guardarFrase(frase: Frase) {
+  await (await bd()).put('frases', frase);
+}
+
+export async function borrarFrases(ids: string[]) {
+  const db = await bd();
+  const tx = db.transaction('frases', 'readwrite');
+  await Promise.all([...ids.map((id) => tx.store.delete(id)), tx.done]);
 }
