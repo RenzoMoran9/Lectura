@@ -11,7 +11,18 @@ import { useLibros } from '../estado/libros';
 import { dibujarFrase, lienzoDeMarcas } from '../frases/dibujo';
 import { Marcador, type Previa } from '../frases/marcador';
 import type { Frase } from '../frases/modelo';
-import { leerTextoPagina, type TextoPagina } from '../frases/texto';
+import { leerTextoPagina, letraEn, type TextoPagina } from '../frases/texto';
+import {
+  dibujarMarcaLectura,
+  falta,
+  tiempoLegible,
+  marcaDesdeTexto,
+  marcaSinTexto,
+  sumarAlRitmo,
+  tocaMarca,
+  type MarcaLectura,
+  type Ritmo,
+} from '../lectura/lugar';
 import type { Sentido } from '../hoja/geometria';
 import { Gestos } from '../hoja/gestos';
 import { densidad, disponer, esCelular, pliego, type Caja, type Disposicion } from '../hoja/maqueta';
@@ -19,12 +30,14 @@ import { MotorHoja, type Escena } from '../hoja/motor';
 import { Pasador, type Pase } from '../hoja/pasador';
 import { acercarEn, aLienzo, conZoom, desplazable, encuadrar, limitar, SIN_ZOOM, zoomAlTexto, type Encuadre, type Zoom } from '../hoja/zoom';
 import { capituloDe, leerCapitulos, type Capitulo } from '../pdf/indice';
+import type { TipoTrazo } from '../sonido/sonido';
 import { abrirPdf, bytesLeidos, cerrarPdf, type DocumentoPdf } from '../pdf/pdf';
 import { Paginas } from '../pdf/paginas';
 import { ambiente } from '../sonido/ambiente';
 import { sonido } from '../sonido/sonido';
 import { AvisoBreve, AvisoModo, type Mensaje } from './Avisos';
 import { Icono } from './Icono';
+import { Indice } from './Indice';
 import { MenuEsquina } from './MenuEsquina';
 import { PanelFrases } from './PanelFrases';
 import { PapelYSonido } from './PapelYSonido';
@@ -76,6 +89,13 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const [hayZoom, setHayZoom] = useState(false);
   const [capitulos, setCapitulos] = useState<Capitulo[]>([]);
   const [ajuste, setAjuste] = useState<Ajuste>(() => (useAjustes.getState().ajusteTexto ? 'texto' : 'pagina'));
+  /** Fui a otra parte del libro (una frase, el índice, la barra): aquí iba, para volver. */
+  const [regreso, setRegreso] = useState<{ pagina: number; cy?: number } | null>(null);
+  const [indiceAbierto, setIndiceAbierto] = useState(false);
+  const [pasando, setPasando] = useState(false);
+  const [destello, setDestello] = useState<{ x: number; y: number; w: number; h: number; clave: number } | null>(null);
+  const [ritmo, setRitmo] = useState<Ritmo | undefined>(undefined);
+  const marcaLectura = useLibros((s) => s.libros.find((l) => l.id === libroId)?.marcador);
   const cerrarMensaje = useCallback(() => setMensaje(null), []);
 
   const motor = useRef<MotorHoja | null>(null);
@@ -86,6 +106,18 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const paginaRef = useRef(0);
   const dispRef = useRef<Disposicion | null>(null);
   const zoomRef = useRef<Zoom>(SIN_ZOOM);
+  const regresoRef = useRef<{ pagina: number; cy?: number } | null>(null);
+  const pasesDesdeSalto = useRef(0);
+  /** Altura de la página (0..1) a la que hay que llevar la vista cuando la página esté lista. */
+  const cyPendiente = useRef<number | null>(null);
+  const destelloPendiente = useRef(false);
+  const ritmoRef = useRef<Ritmo | undefined>(undefined);
+  const inicioPagina = useRef(performance.now());
+  const capitulosRef = useRef<Capitulo[]>([]);
+  const listoRef = useRef(false);
+  const marcadorRef = useRef<MarcaLectura | undefined>(marcaLectura);
+  marcadorRef.current = marcaLectura;
+  const cintaRef = useRef<HTMLDivElement>(null);
   const ajusteRef = useRef<Ajuste>(ajuste);
   /** La página aún no estaba medida al encuadrarla: se encuadra de nuevo cuando llegue. */
   const encuadrePendiente = useRef<'arriba' | 'abajo' | null>(null);
@@ -122,10 +154,26 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       if (!vivo) return;
       const inicial = Math.max(0, Math.min(d.numPages - 1, paginaPedida ?? av?.pagina ?? 0));
       paginaRef.current = inicial;
+      ritmoRef.current = av?.ritmo;
+      setRitmo(av?.ritmo);
+      const m = l.marcador;
+      if (av && paginaPedida != null && paginaPedida !== av.pagina) {
+        // Vine a ver una frase: donde iba queda guardado para volver.
+        regresoRef.current = { pagina: av.pagina, cy: av.cy };
+        setRegreso(regresoRef.current);
+      } else if (m && m.pagina === inicial) {
+        cyPendiente.current = (m.y0 + m.y1) / 2;
+        destelloPendiente.current = true;
+      } else if (av?.cy != null && inicial === av.pagina) cyPendiente.current = av.cy;
+      listoRef.current = true;
       setLibro(l);
       setDoc(d);
       setPagina(inicial);
-      void leerCapitulos(d).then((c) => vivo && setCapitulos(c));
+      void leerCapitulos(d).then((c) => {
+        if (!vivo) return;
+        capitulosRef.current = c;
+        setCapitulos(c);
+      });
     })().catch((e) => vivo && setError(e instanceof Error ? e.message : 'No se pudo abrir el libro.'));
     return () => {
       vivo = false;
@@ -172,7 +220,10 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   };
 
   // ---------- Zoom ----------
+  // El tamaño del lector se mide al acomodar la hoja (así no se lee del DOM en cada cuadro).
+  const vistaMedida = useRef<{ w: number; h: number } | null>(null);
   const vistaTam = () => {
+    if (vistaMedida.current) return vistaMedida.current;
     const el = contenedor.current;
     return el && el.clientWidth ? { w: el.clientWidth, h: el.clientHeight } : null;
   };
@@ -253,6 +304,10 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     };
     transformar(sombraLibro.current, dispRef.current?.libro);
     transformar(lienzoPrevia.current, marcaPagina.current?.rect ?? dispRef.current?.hoja);
+    ubicarCintaRef.current();
+    // La altura a la que voy en la página: se recuerda al salir, aunque la hoja siga deslizándose.
+    const cy = vistaCyRef.current();
+    if (cy !== undefined) cyRef.current = cy;
     setHayZoom(conZoom(z));
   }, []);
 
@@ -319,7 +374,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         const e = 1 - Math.pow(1 - t, 3);
         aplicarZoom({ z: desdeZ.z + (destino.z - desdeZ.z) * e, x: desdeZ.x + (destino.x - desdeZ.x) * e, y: desdeZ.y + (destino.y - desdeZ.y) * e });
         if (t < 1) animZoom.current = requestAnimationFrame(paso);
-        else programarDetalle();
+        else vistaQuietaRef.current();
       };
       animZoom.current = requestAnimationFrame(paso);
     },
@@ -349,6 +404,162 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   };
   const reencuadrarRef = useRef(reencuadrar);
   reencuadrarRef.current = reencuadrar;
+
+  // ---------- Dónde voy: la altura en la página, el marcador y «volver a donde iba» ----------
+  /** Borde izquierdo de la hoja de una página en el lienzo (en doble página, la izquierda va antes del lomo). */
+  const origenPagina = (i: number) => {
+    const d = dispRef.current!;
+    return d.modo === 'doble' && i === pliego(paginaRef.current).izquierda ? d.hoja.x - d.hoja.w : d.hoja.x;
+  };
+
+  /** Con la vista movible: a qué altura de la página está el centro de la pantalla (0..1). */
+  const vistaCy = (): number | undefined => {
+    const d = dispRef.current;
+    const v = vistaTam();
+    if (!d || !v || !sePuedeMover()) return undefined;
+    const r = paginas.current?.rectPagina(paginaRef.current) ?? d.caja;
+    const y = aLienzo(zoomRef.current, v.w / 2, v.h / 2).y;
+    return Math.max(0, Math.min(1, (y - d.hoja.y - r.y) / r.h));
+  };
+  const cyRef = useRef<number | undefined>(undefined);
+  const vistaCyRef = useRef(vistaCy);
+  vistaCyRef.current = vistaCy;
+
+  /** Lleva la vista a la altura guardada, cuando la página ya está medida. */
+  const aplicarCyPendiente = () => {
+    const cy = cyPendiente.current;
+    const d = dispRef.current;
+    const v = vistaTam();
+    const r = paginas.current?.rectPagina(paginaRef.current);
+    if (cy == null || !d || !v || !r) return false;
+    cyPendiente.current = null;
+    encuadrePendiente.current = null;
+    const z = objetivo('arriba');
+    if (!z) return false;
+    ponerZoom({ ...z, y: v.h / 2 - z.z * (d.hoja.y + r.y + cy * r.h) });
+    cyRef.current = cy;
+    programarDetalle();
+    return true;
+  };
+
+  /** Rectángulo en la pantalla de la línea marcada (si su página está a la vista). */
+  const rectMarcaPantalla = (m: MarcaLectura) => {
+    const d = dispRef.current;
+    const r = paginas.current?.rectPagina(m.pagina);
+    if (!d || !r || !visibles().includes(m.pagina)) return null;
+    const z = zoomRef.current;
+    const x = origenPagina(m.pagina) + r.x + m.x0 * r.w;
+    const y = d.hoja.y + r.y + m.y0 * r.h;
+    return { x: z.x + z.z * x, y: z.y + z.z * y, w: z.z * (m.x1 - m.x0) * r.w, h: z.z * (m.y1 - m.y0) * r.h, borde: z.x + z.z * origenPagina(m.pagina) };
+  };
+
+  /** La cinta roja del marcador, en el borde de la hoja a la altura de la línea. */
+  const ubicarCinta = () => {
+    const el = cintaRef.current;
+    if (!el) return;
+    const m = marcadorRef.current;
+    const rs = m ? rectMarcaPantalla(m) : null;
+    if (!rs) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+    el.style.transform = `translate(${Math.max(0, rs.borde)}px, ${rs.y + rs.h / 2 - 14}px)`;
+  };
+  const ubicarCintaRef = useRef(ubicarCinta);
+  ubicarCintaRef.current = ubicarCinta;
+
+  /** Al abrir el libro en la página del marcador, la línea brilla un momento. */
+  const mostrarDestello = () => {
+    const m = marcadorRef.current;
+    if (!destelloPendiente.current || !m || m.pagina !== paginaRef.current || !paginas.current?.obtener(m.pagina)) return;
+    destelloPendiente.current = false;
+    window.setTimeout(() => {
+      const rs = rectMarcaPantalla(m);
+      if (!rs) return;
+      setDestello({ x: rs.x, y: rs.y, w: rs.w, h: rs.h, clave: Date.now() });
+      setMensaje({ texto: 'Aquí te quedaste', clave: Date.now() });
+    }, 350);
+  };
+
+  const ponerRegreso = (r: { pagina: number; cy?: number } | null) => {
+    regresoRef.current = r;
+    pasesDesdeSalto.current = 0;
+    setRegreso(r);
+  };
+
+  /** La vista se quedó quieta: detalle nítido y, un momento después, se recuerda la altura. */
+  const guardado = useRef(0);
+  const vistaQuieta = () => {
+    programarDetalle();
+    cyRef.current = vistaCy();
+    clearTimeout(guardado.current);
+    guardado.current = window.setTimeout(() => anotarRef.current(), 800);
+  };
+  const vistaQuietaRef = useRef(vistaQuieta);
+  vistaQuietaRef.current = vistaQuieta;
+  const anotarRef = useRef(() => {});
+
+  /**
+   * El dedo quieto medio segundo sobre una línea: ahí queda el marcador (una cinta en el borde y
+   * una raya de lápiz rojo desde la palabra). Sobre el marcador que ya estaba, lo quita.
+   */
+  const ponerMarcador = async (x: number, y: number) => {
+    const d = dispRef.current;
+    const pags = paginas.current;
+    const doc = docActual.current;
+    if (!d || !pags || !doc || useFrases.getState().herramienta) return;
+    const c = aLienzo(zoomRef.current, x, y);
+    let i = paginaRef.current;
+    if (d.modo === 'doble') {
+      const { izquierda, derecha } = pliego(paginaRef.current);
+      i = c.x < d.hoja.x ? izquierda : derecha;
+    }
+    if (i < 0 || i >= totalRef.current) return;
+    const r = pags.rectPagina(i);
+    const ub = pags.ubicacion(i);
+    if (!r || !ub) return;
+    const u = (c.x - origenPagina(i) - r.x) / r.w;
+    const v = (c.y - d.hoja.y - r.y) / r.h;
+    if (u < -0.05 || u > 1.05 || v < 0 || v > 1) return;
+    navigator.vibrate?.(12);
+    const { actualizar } = useLibros.getState();
+    const actual = marcadorRef.current;
+    if (actual && actual.pagina === i && tocaMarca(actual, u, v)) {
+      await actualizar(libroId, { marcador: undefined });
+      setMensaje({ texto: 'Marcador quitado', clave: Date.now() });
+      return;
+    }
+    const guardado = textos.current.get(i);
+    let t: TextoPagina | undefined = guardado && guardado !== 'leyendo' ? guardado : undefined;
+    if (!t) {
+      try {
+        t = await leerTextoPagina(await doc.getPage(i + 1));
+        textos.current.set(i, t);
+      } catch {
+        t = undefined;
+      }
+    }
+    let m: MarcaLectura | null = null;
+    if (t?.tieneTexto) {
+      const k = letraEn(t, u * ub.ancho, v * ub.alto, 14);
+      if (k >= 0) m = marcaDesdeTexto(t, k, ub.ancho, ub.alto, i);
+    }
+    m ??= marcaSinTexto(Math.max(0, u), v, pags.contenido(i)?.x1 ?? 0.92, i);
+    await actualizar(libroId, { marcador: m });
+    // Marcar aquí es decir «voy por aquí»: si había ido a ver otra parte, ahora este es mi lugar.
+    if (regresoRef.current) ponerRegreso(null);
+    anotarRef.current();
+    setMensaje({ texto: 'Marcador puesto · aquí te quedaste', clave: Date.now() });
+  };
+  const ponerMarcadorRef = useRef(ponerMarcador);
+  ponerMarcadorRef.current = ponerMarcador;
+  const aplicarCyPendienteRef = useRef(aplicarCyPendiente);
+  aplicarCyPendienteRef.current = aplicarCyPendiente;
+  const mostrarDestelloRef = useRef(mostrarDestello);
+  mostrarDestelloRef.current = mostrarDestello;
+  const ponerRegresoRef = useRef(ponerRegreso);
+  ponerRegresoRef.current = ponerRegreso;
 
   // Para las pruebas automáticas (solo en desarrollo): el estado de la vista.
   if (import.meta.env.DEV)
@@ -382,17 +593,32 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       const tam = pags.lienzoTam;
       if (!ub || !tam) return;
       const fs = useFrases.getState().frases.filter((f) => f.libroId === libro.id && f.pagina === i);
-      if (!fs.length) {
+      const marca = useLibros.getState().libros.find((l) => l.id === libro.id)?.marcador;
+      const conMarca = marca?.pagina === i ? marca : null;
+      if (!fs.length && !conMarca) {
         lienzosMarcas.delete(i);
         m.subirMarcas(i, null);
         return;
       }
       const c = lienzoDeMarcas(tam.ancho, tam.alto, fs, { x: ub.x, y: ub.y, escala: ub.escala, dpr: tam.dpr }, lienzosMarcas.get(i));
+      // La raya de lápiz del marcador va en la página: se curva con ella al pasarla.
+      if (conMarca) {
+        const k = tam.dpr;
+        dibujarMarcaLectura(c.getContext('2d')!, conMarca, ub.x * k, ub.y * k, ub.ancho * ub.escala * k, ub.alto * ub.escala * k, k);
+      }
       lienzosMarcas.set(i, c);
       m.subirMarcas(i, c);
     };
     const dejarDeEscuchar = useFrases.subscribe((ahora, antes) => {
       if (ahora.frases !== antes.frases) pags.indices().forEach(pintarMarcas);
+    });
+    const marcaDe = (st: { libros: Libro[] }) => st.libros.find((l) => l.id === libro.id)?.marcador;
+    const dejarDeEscucharMarca = useLibros.subscribe((ahora, antes) => {
+      const a = marcaDe(ahora);
+      const b = marcaDe(antes);
+      if (a === b) return;
+      for (const i of new Set([a?.pagina, b?.pagina])) if (i != null && pags.obtener(i)) pintarMarcas(i);
+      requestAnimationFrame(() => ubicarCintaRef.current());
     });
 
     pags.onLista = (i, c) => {
@@ -401,8 +627,12 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       if (visibles().includes(i)) {
         setDibujada(visibles().every((j) => !!pags.obtener(j)));
         const pendiente = encuadrePendiente.current;
-        if (i === paginaRef.current && pendiente && !gestos.current?.ocupado && !p.ocupado) reencuadrarRef.current(pendiente, true);
+        const ocupado = gestos.current?.ocupado || p.ocupado;
+        if (i === paginaRef.current && cyPendiente.current != null && !ocupado) aplicarCyPendienteRef.current();
+        else if (i === paginaRef.current && pendiente && !ocupado) reencuadrarRef.current(pendiente, true);
         else if (necesitaDetalle(zoomRef.current)) programarDetalle();
+        if (i === paginaRef.current) mostrarDestelloRef.current();
+        ubicarCintaRef.current();
       }
     };
     pags.onSoltada = (i) => {
@@ -446,7 +676,17 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       },
       alTerminar: (s: Sentido, paso: boolean) => {
         sonido.pararRoce();
+        setPasando(false);
         if (paso) {
+          // El ritmo: cuánto tardé en leer la página que acabo de pasar.
+          const ahora = performance.now();
+          if (s === 'adelante') {
+            ritmoRef.current = sumarAlRitmo(ritmoRef.current, (ahora - inicioPagina.current) / 1000 / (esDoble() ? 2 : 1));
+            setRitmo(ritmoRef.current);
+          }
+          inicioPagina.current = ahora;
+          // Si había ido a ver otra parte y sigo leyendo desde ahí, ese pasa a ser mi lugar.
+          if (regresoRef.current && ++pasesDesdeSalto.current >= 2) ponerRegresoRef.current(null);
           if (esDoble()) {
             const { izquierda, derecha } = pliego(paginaRef.current);
             paginaRef.current = s === 'adelante' ? derecha + 1 : Math.max(0, izquierda - 2);
@@ -460,6 +700,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       },
       alEmpezar: () => {
         setCromo(false);
+        setPasando(true);
         sonido.empezarRoce();
       },
       alMover: (v) => sonido.moverRoce(v),
@@ -549,6 +790,13 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       return s === 'adelante' ? z.x + z.z * (t.x + t.w) <= v.w + tolerancia : z.x + z.z * t.x >= -tolerancia;
     };
 
+    // Sonido al marcar: lápiz, resaltador o goma, según la velocidad del dedo.
+    let ultimoTrazo = { x: 0, y: 0, t: 0 };
+    const trazoDe = (): TipoTrazo | null => {
+      const h = useFrases.getState().herramienta;
+      return h === 'lapiz' ? 'lapiz' : h === 'resaltador' ? 'resaltador' : h === 'borrador' ? 'borrador' : null;
+    };
+
     gestos.current = new Gestos({
       zoom: () => zoomRef.current,
       ponerZoom: (z, animar) => ponerZoom(z, animar),
@@ -595,14 +843,26 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           aplicarZoom(zoomRef.current); // la vista previa va sobre esta página
           borradasGesto.current = [];
           mk.bajar(c.x - rect.x, c.y - rect.y, id);
+          const tipo = trazoDe();
+          if (tipo) sonido.empezarTrazo(tipo);
+          ultimoTrazo = { x, y, t: performance.now() };
         },
         mover: (x, y, id) => {
           const c = aLienzo(zoomRef.current, x, y);
           const r = marcaPagina.current?.rect;
           if (r) mk.mover(c.x - r.x, c.y - r.y, id);
+          const t = performance.now();
+          sonido.moverTrazo(Math.hypot(x - ultimoTrazo.x, y - ultimoTrazo.y) / Math.max(1, t - ultimoTrazo.t));
+          ultimoTrazo = { x, y, t };
         },
-        subir: (_x, _y, id) => mk.subir(id),
-        cancelar: () => mk.cancelar(),
+        subir: (_x, _y, id) => {
+          sonido.pararTrazo();
+          mk.subir(id);
+        },
+        cancelar: () => {
+          sonido.pararTrazo();
+          mk.cancelar();
+        },
       },
       tocar: () => {
         const d = dispRef.current;
@@ -653,13 +913,16 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           reencuadrar({ px: v.w / 2, py: v.h / 2 }, true);
         } else cambiarAjuste('libre');
       },
-      finZoom: programarDetalle,
+      finZoom: () => vistaQuietaRef.current(),
+      mantener: (x, y) => void ponerMarcadorRef.current(x, y),
     });
 
     quieta();
 
     return () => {
       dejarDeEscuchar();
+      dejarDeEscucharMarca();
+      sonido.pararTrazo();
       gestos.current?.destruir();
       gestos.current = null;
       marcador.current = null;
@@ -688,6 +951,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       const w = el.clientWidth;
       const h = el.clientHeight;
       if (!w || !h) return;
+      const cyAntes = cyRef.current;
+      vistaMedida.current = { w, h };
       setAnchoVentana(window.innerWidth);
       const ancha = !esCelular(w, h);
       const d = disponer(w, h, margenesSeguros(), aspecto, ancha ? { barraArriba: BARRA_ARRIBA, barraAbajo: BARRA_ABAJO } : {});
@@ -709,7 +974,12 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       }
       // Al girar el celular se conserva el ajuste (el texto a todo el ancho sigue así).
       if (ajusteRef.current === 'libre') cambiarAjuste('pagina');
+      // Al girar el celular se vuelve a la misma altura de la página.
+      if (cyPendiente.current == null && cyAntes != null) cyPendiente.current = cyAntes;
       reencuadrarRef.current('arriba', false);
+      aplicarCyPendienteRef.current();
+      mostrarDestelloRef.current();
+      ubicarCintaRef.current();
     };
     const obs = new ResizeObserver(medir);
     obs.observe(el);
@@ -730,14 +1000,29 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     setDibujada(visibles().every((i) => !!paginas.current?.obtener(i)));
   };
 
-  const pendiente = useRef<Avance | null>(null);
+  /**
+   * Guarda dónde voy: la página, la altura en ella (con zoom o de lado), el capítulo, mi ritmo y
+   * cuánto me falta. Mientras estoy viendo otra parte (una frase, el índice…), no: mi lugar sigue
+   * siendo el de antes, hasta que siga leyendo desde ahí.
+   */
   const anotar = useCallback(() => {
-    const avance = pendiente.current;
-    if (!avance) return;
-    pendiente.current = null;
+    if (!listoRef.current || regresoRef.current || !totalRef.current) return;
+    const p = paginaRef.current;
+    const f = falta(ritmoRef.current, capitulosRef.current, p, totalRef.current);
+    const avance: Avance = {
+      libroId,
+      pagina: p,
+      total: totalRef.current,
+      actualizado: Date.now(),
+      capitulo: capituloDe(capitulosRef.current, p),
+      cy: cyRef.current,
+      ritmo: ritmoRef.current,
+      falta: f ? { libro: f.libro, capitulo: f.capitulo ?? undefined } : undefined,
+    };
     void guardarAvance(avance);
     anotarAvance(avance);
-  }, [anotarAvance]);
+  }, [anotarAvance, libroId]);
+  anotarRef.current = anotar;
 
   const capitulo = pagina !== null ? capituloDe(capitulos, pagina) : undefined;
 
@@ -746,11 +1031,60 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     pedirPaginas();
     motor.current?.quitarDetalles();
     if (necesitaDetalle(zoomRef.current)) programarDetalle();
-    pendiente.current = { libroId: libro.id, pagina, total: doc.numPages, actualizado: Date.now(), capitulo };
-    const t = setTimeout(anotar, 250);
+    ubicarCintaRef.current();
+    const t = setTimeout(() => {
+      cyRef.current = vistaCy();
+      anotar();
+    }, 250);
     return () => clearTimeout(t);
-    // pedirPaginas lee refs: no hace falta como dependencia.
-  }, [pagina, doc, libro, anotar, capitulo]);
+    // pedirPaginas y vistaCy leen refs: no hace falta ponerlas como dependencia.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pagina, doc, libro, anotar, regreso, capitulos]);
+
+  // La pantalla no se apaga mientras leo. Si nadie la toca en 10 minutos (me quedé dormido), sí.
+  useEffect(() => {
+    let candado: WakeLockSentinel | null = null;
+    let vivo = true;
+    let quieto = 0;
+    const pedir = async () => {
+      if (candado || document.visibilityState !== 'visible' || !('wakeLock' in navigator)) return;
+      try {
+        const c = await navigator.wakeLock.request('screen');
+        if (!vivo) return void c.release();
+        candado = c;
+        c.addEventListener('release', () => candado === c && (candado = null));
+      } catch {
+        /* sin permiso o con poca batería: la pantalla se apaga como siempre */
+      }
+    };
+    const soltar = () => {
+      void candado?.release();
+      candado = null;
+    };
+    const actividad = () => {
+      clearTimeout(quieto);
+      quieto = window.setTimeout(soltar, 10 * 60e3);
+      void pedir();
+    };
+    const alCambiar = () => {
+      if (document.visibilityState === 'visible') {
+        actividad();
+        inicioPagina.current = performance.now(); // el tiempo fuera de la app no cuenta en el ritmo
+      } else soltar();
+    };
+    actividad();
+    document.addEventListener('visibilitychange', alCambiar);
+    window.addEventListener('pointerdown', actividad, true);
+    window.addEventListener('keydown', actividad, true);
+    return () => {
+      vivo = false;
+      clearTimeout(quieto);
+      soltar();
+      document.removeEventListener('visibilitychange', alCambiar);
+      window.removeEventListener('pointerdown', actividad, true);
+      window.removeEventListener('keydown', actividad, true);
+    };
+  }, []);
 
   // Al salir del libro o de la app, lo último queda guardado.
   useEffect(() => {
@@ -826,18 +1160,51 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     ctx.globalCompositeOperation = 'source-over';
   }, []);
 
+  /**
+   * Saltar a otra página (una frase, el índice, la barra). Salvo que se diga lo contrario, donde
+   * iba queda guardado para volver con «Volver a la pág. …».
+   */
   const irA = useCallback(
-    (n: number) => {
+    (n: number, opciones: { regreso?: boolean; cy?: number } = {}) => {
       if (!doc) return;
       const destino = Math.max(0, Math.min(doc.numPages - 1, n));
+      const aqui = paginaRef.current;
+      if (opciones.regreso !== false && destino !== aqui) {
+        if (regresoRef.current?.pagina === destino) ponerRegresoRef.current(null);
+        else if (!regresoRef.current) ponerRegresoRef.current({ pagina: aqui, cy: vistaCyRef.current() });
+        else pasesDesdeSalto.current = 0;
+      }
       paginaRef.current = destino;
+      inicioPagina.current = performance.now();
+      cyPendiente.current = opciones.cy ?? null;
       setPagina(destino);
       void revisarMemoria();
       motor.current?.poner(escenaQuieta());
       reencuadrarRef.current('arriba', false);
+      aplicarCyPendienteRef.current();
     },
     [doc, revisarMemoria, escenaQuieta],
   );
+
+  /** «Volver a la pág. …»: justo donde iba, a la misma altura. */
+  const volverAlLugar = () => {
+    const r = regresoRef.current;
+    if (!r) return;
+    ponerRegreso(null);
+    irA(r.pagina, { regreso: false, cy: r.cy });
+  };
+
+  /** Desde el índice: ir al marcador (la línea brilla al llegar). */
+  const irAlMarcador = () => {
+    const m = marcadorRef.current;
+    if (!m) return;
+    destelloPendiente.current = true;
+    if (m.pagina === paginaRef.current) {
+      cyPendiente.current = (m.y0 + m.y1) / 2;
+      aplicarCyPendiente();
+      mostrarDestello();
+    } else irA(m.pagina, { cy: (m.y0 + m.y1) / 2 });
+  };
 
   // ---------- 5. Teclado: ← → pasan la hoja; Ctrl + / − / 0 acercan ----------
   useEffect(() => {
@@ -936,13 +1303,16 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           : `${miles(pl.izquierda + 1)}–${miles(pl.derecha + 1)}`
       : miles(mostrada + 1);
   const tituloBarra = [libro?.titulo, capitulo].filter(Boolean).join(' · ');
+  const faltaAhora = pagina !== null ? falta(ritmo, capitulos, pagina, total) : null;
   const irASalto = () => {
     if (saltoA !== null) irA(saltoA);
     setSaltoA(null);
   };
 
   return (
-    <div className={`lector ${enMesa ? 'en-mesa' : ''} ${disp?.modo === 'doble' ? 'en-doble' : ''} ${hayZoom ? 'con-zoom' : ''} papel-fondo-${papel}`}>
+    <div
+      className={`lector ${enMesa ? 'en-mesa' : ''} ${disp?.modo === 'doble' ? 'en-doble' : ''} ${hayZoom ? 'con-zoom' : ''} ${pasando ? 'pasando' : ''} papel-fondo-${papel}`}
+    >
       <div
         ref={contenedor}
         className="lector-hoja"
@@ -965,6 +1335,17 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
             style={{ width: disp.hoja.w, height: disp.hoja.h, transform: `translate(${disp.hoja.x}px, ${disp.hoja.y}px)` }}
           />
         )}
+        {/* La cinta del marcador, en el borde de la hoja (se esconde mientras la hoja se pasa). */}
+        <div ref={cintaRef} className="cinta-lectura" style={{ display: 'none' }} aria-hidden="true" />
+        {destello && (
+          <div
+            key={destello.clave}
+            className="destello"
+            style={{ left: destello.x - 6, top: destello.y - 4, width: destello.w + 12, height: destello.h + 8 }}
+            onAnimationEnd={() => setDestello(null)}
+            aria-hidden="true"
+          />
+        )}
         {!error && (!doc || !dibujada) && <div className={`cargando ${noche || enMesa ? 'claro' : ''}`}>{doc ? 'Dibujando la página…' : 'Abriendo el libro…'}</div>}
       </div>
 
@@ -982,6 +1363,9 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           <Icono nombre="chevron-left" tam={20} /> {desde === 'frases' ? 'Mis frases' : 'Estante'}
         </button>
         <div className="cromo-titulo">{enMesa ? tituloBarra : libro?.titulo}</div>
+        <button className="icono-barra" onClick={() => setIndiceAbierto(true)} aria-label="Índice" title="Índice">
+          <Icono nombre="lista" tam={20} />
+        </button>
         {enMesa && anchoVentana >= 1100 && (
           <button
             className={`icono-barra ${panelFrases ? 'on' : ''}`}
@@ -995,8 +1379,29 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       </div>
 
       <div className={`cromo-abajo ${cromo || enMesa ? 'visible' : ''} ${enMesa ? 'fijo' : ''}`} style={conPanel ? { right: PANEL } : undefined}>
+        {faltaAhora && (
+          <span className="cromo-falta">
+            <Icono nombre="reloj" tam={14} />
+            <span>
+              {faltaAhora.capitulo != null ? (
+                <>
+                  <b>{tiempoLegible(faltaAhora.capitulo)}</b> para terminar el capítulo · {tiempoLegible(faltaAhora.libro)} el libro
+                </>
+              ) : (
+                <>
+                  <b>{tiempoLegible(faltaAhora.libro)}</b> para terminar el libro
+                </>
+              )}
+            </span>
+          </span>
+        )}
         <span className="cromo-pag">{etiquetaPagina}</span>
-        <input
+        <span className="pista-capitulos">
+          {total > 1 &&
+            capitulos
+              .filter((c) => c.pagina > 0)
+              .map((c, i) => <i key={i} style={{ left: `calc(10px + (100% - 20px) * ${c.pagina / (total - 1)})` }} />)}
+          <input
           type="range"
           min={0}
           max={Math.max(0, total - 1)}
@@ -1007,7 +1412,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           onChange={(e) => setSaltoA(Number(e.target.value))}
           onPointerUp={irASalto}
           onKeyUp={irASalto}
-        />
+          />
+        </span>
         <span className="cromo-pag">de {miles(total)}</span>
       </div>
 
@@ -1017,6 +1423,12 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
 
       <AvisoModo />
       <AvisoBreve mensaje={mensaje} alCerrar={cerrarMensaje} />
+      {regreso && !herramienta && (
+        <button className={`volver-lugar ${cromo && !enMesa ? 'bajo-cromo' : ''} ${enMesa ? 'en-mesa' : ''}`} onClick={volverAlLugar}>
+          <span className="cinta-chica" aria-hidden="true" />
+          Volver a la pág. {miles(regreso.pagina + 1)} <small>· donde ibas</small>
+        </button>
+      )}
       {hayZoom && ajuste === 'libre' && !herramienta && (
         <button
           className="quitar-zoom"
@@ -1043,6 +1455,24 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       )}
 
       {panel && <PapelYSonido libroId={libroId} alCerrar={() => setPanel(false)} />}
+      {indiceAbierto && (
+        <Indice
+          capitulos={capitulos}
+          pagina={pagina ?? 0}
+          total={total}
+          marcador={marcaLectura}
+          ritmo={ritmo}
+          alIr={(p) => {
+            setIndiceAbierto(false);
+            irA(p);
+          }}
+          alMarcador={() => {
+            setIndiceAbierto(false);
+            irAlMarcador();
+          }}
+          alCerrar={() => setIndiceAbierto(false)}
+        />
+      )}
     </div>
   );
 }

@@ -17,6 +17,14 @@ const ARCHIVOS: Record<JuegoSonido, { roce: string[]; golpe: string[] }> = {
   },
 };
 
+/** Lo que suena mientras se marca: lápiz al encerrar, resaltador y goma de borrar. */
+export type TipoTrazo = 'lapiz' | 'resaltador' | 'borrador';
+const TRAZOS: Record<TipoTrazo, string[]> = {
+  lapiz: ['lapiz-1', 'lapiz-2'],
+  resaltador: ['resaltador-1'],
+  borrador: ['borrador-1'],
+};
+
 interface Juego {
   roce: AudioBuffer[];
   golpe: AudioBuffer[];
@@ -83,6 +91,9 @@ export class SonidoPapel {
   private cargados = new Map<JuegoSonido, Juego>();
   private maestro: GainNode | null = null;
   private roce: { fuente: AudioBufferSourceNode; ganancia: GainNode; filtro: BiquadFilterNode } | null = null;
+  private trazos = new Map<TipoTrazo, AudioBuffer[]>();
+  private cargandoTrazos = false;
+  private trazo: { fuente: AudioBufferSourceNode; ganancia: GainNode; velocidad: number } | null = null;
   private velocidad = 0;
   activo = true;
   volumen = 0.7;
@@ -106,6 +117,7 @@ export class SonidoPapel {
     }
     if (this.ctx.state !== 'running') void this.ctx.resume().catch(() => {});
     void this.cargar(this.juego);
+    this.cargarTrazos();
     this.alDespertar?.(this.ctx);
   }
 
@@ -235,6 +247,62 @@ export class SonidoPapel {
       };
       requestAnimationFrame(paso);
     }, () => {});
+  }
+
+  private cargarTrazos() {
+    const ctx = this.ctx;
+    if (!ctx || this.cargandoTrazos) return;
+    this.cargandoTrazos = true;
+    for (const [tipo, nombres] of Object.entries(TRAZOS) as [TipoTrazo, string[]][]) {
+      Promise.all(
+        nombres.map(async (n) => {
+          const r = await fetch(`${import.meta.env.BASE_URL}sonidos/${n}.mp3`);
+          if (!r.ok) throw new Error(`Falta el sonido ${n}`);
+          return hacerBucle(ctx, normalizar(ctx, await ctx.decodeAudioData(await r.arrayBuffer()), 'rms', 0.14), 0.12);
+        }),
+      ).then(
+        (b) => this.trazos.set(tipo, b),
+        (e) => console.warn('No se pudo cargar el sonido de marcar', e),
+      );
+    }
+  }
+
+  /** Empieza el sonido de marcar (en silencio: suena cuando el dedo se mueve). */
+  empezarTrazo(tipo: TipoTrazo) {
+    const ctx = this.ctx;
+    const bufs = this.trazos.get(tipo);
+    if (!ctx || !bufs || !this.maestro || this.nivel === 0) return;
+    this.pararTrazo(0.02);
+    const buf = azar(bufs);
+    const fuente = ctx.createBufferSource();
+    fuente.buffer = buf;
+    fuente.loop = true;
+    const ganancia = ctx.createGain();
+    ganancia.gain.value = 0;
+    fuente.connect(ganancia).connect(this.maestro);
+    fuente.start(0, Math.random() * buf.duration);
+    this.trazo = { fuente, ganancia, velocidad: 0 };
+  }
+
+  /** Velocidad del dedo al marcar, en px CSS por milisegundo. */
+  moverTrazo(velocidad: number) {
+    const ctx = this.ctx;
+    const t = this.trazo;
+    if (!ctx || !t) return;
+    t.velocidad = t.velocidad * 0.5 + velocidad * 0.5;
+    const v = Math.min(1, t.velocidad / 0.7);
+    t.ganancia.gain.setTargetAtTime(this.nivel * Math.pow(v, 0.7) * 0.75, ctx.currentTime, 0.03);
+    t.fuente.playbackRate.setTargetAtTime(0.9 + 0.2 * v, ctx.currentTime, 0.06);
+  }
+
+  pararTrazo(fundido = 0.06) {
+    const ctx = this.ctx;
+    const t = this.trazo;
+    if (!ctx || !t) return;
+    this.trazo = null;
+    t.ganancia.gain.cancelScheduledValues(ctx.currentTime);
+    t.ganancia.gain.setTargetAtTime(0, ctx.currentTime, fundido / 3);
+    t.fuente.stop(ctx.currentTime + fundido + 0.05);
   }
 
   cambiarJuego(juego: JuegoSonido) {

@@ -10,3 +10,6 @@ términos de servicio de ElevenLabs para contenido generado. No son grabaciones 
 | `roce-antiguo-1.mp3`, `roce-antiguo-2.mp3` | roce continuo de papel viejo y seco (en bucle) |
 | `golpe-nuevo-1..3.mp3` | la hoja nueva se asienta |
 | `golpe-antiguo-1..3.mp3` | la hoja antigua se asienta |
+| `lapiz-1.mp3`, `lapiz-2.mp3` | lápiz de grafito sobre el papel (al encerrar, en bucle) |
+| `resaltador-1.mp3` | resaltador que se desliza sobre el papel (en bucle) |
+| `borrador-1.mp3` | goma de borrar sobre el papel (en bucle) |

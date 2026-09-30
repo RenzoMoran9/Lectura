@@ -34,6 +34,11 @@ La uso sobre todo desde el celular, y también desde la computadora.
    - Al tocar una frase, me lleva a su página.
    - «Repasar» me muestra frases al azar.
 7. **Recordar dónde me quedé** en cada libro y abrirlo ahí.
+   - También la altura en la página (con zoom o de lado).
+   - Marcador: dejo el dedo quieto medio segundo sobre la línea y queda una cinta roja en el borde y una raya de lápiz rojo desde esa palabra. Al volver a abrir, esa línea brilla y dice «Aquí te quedaste».
+   - Si voy a ver una frase, el índice u otra página, mi lugar no se pierde: aparece «Volver a la pág. … · donde ibas». Si sigo leyendo desde ahí (dos hojas), ese pasa a ser mi lugar.
+8. **Índice y cuánto falta.** El índice del PDF (si lo trae) con el marcador arriba, los capítulos leídos marcados y el actual con su avance. Abajo, el tiempo que me falta para terminar el capítulo y el libro, según mi ritmo de lectura.
+9. **La pantalla no se apaga** mientras leo (sí, si nadie la toca en 10 minutos).
 
 ## Lo que NO va (por ahora)
 Tienda de libros, botones de compartir, notas largas, conversión a EPUB y reacomodar el texto del PDF.
@@ -113,6 +118,7 @@ Pantallas:
   - Varias variantes elegidas al azar, para que no suene repetido.
   - Grabaciones reales de licencia libre (CC0, por ejemplo de Freesound). Alternativa: generarlas con ElevenLabs.
   - Dos juegos de sonido: «libro nuevo» y «libro antiguo».
+  - Mientras se marca: el roce del lápiz, del resaltador o de la goma, que sigue la velocidad del dedo.
   - Sonido de fondo opcional mientras se lee, elegido para cada libro: para relajarse (playa, bosque y fogata, lluvia) o según el género (terror, suspenso, drama, acción), con su propio volumen.
 - **Gestos:**
   - En modo lectura, el dedo pasa las hojas.
@@ -120,6 +126,7 @@ Pantallas:
   - Se pellizca para acercar. Con zoom, arriba y abajo mueve la página y a los lados la pasa (cuando ya se ve el borde del texto); el zoom se mantiene en la página siguiente.
   - Doble toque: el texto a todo el ancho de la pantalla (se recortan los márgenes blancos, sin cortar el texto) o vuelve a la página entera. Un pellizco que queda cerca de ese ancho se acomoda justo en él.
   - Celular de lado: la página va a todo el ancho y se lee deslizando hacia abajo.
+  - Dedo quieto medio segundo (en modo lectura): pone el marcador en esa línea; sobre el marcador, lo quita.
 - **PDFs escaneados (sin texto):** se leen igual. Lo que se resalte o encierre se guarda como recorte de imagen. El reconocimiento de texto (OCR) queda para más adelante.
 - **Celular:** una página a la vez.
 - **PC o tablet en horizontal:** doble página, las flechas ← → pasan la hoja con el mismo sonido y Mis frases va en un panel lateral.
@@ -158,5 +165,5 @@ Pantallas:
 - Notas en una frase.
 - Exportar mis frases.
 - OCR para PDFs escaneados.
-- Índice y marcadores del PDF.
+- Marcadores del PDF (el índice ya está).
 - Brillo y tibieza del papel.

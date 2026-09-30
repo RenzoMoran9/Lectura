@@ -3,6 +3,7 @@
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Frase } from '../frases/modelo';
+import type { MarcaLectura, Ritmo } from '../lectura/lugar';
 import type { TipoAmbiente } from '../sonido/ambiente';
 
 export type Almacen = 'opfs' | 'idb';
@@ -25,6 +26,8 @@ export interface Libro {
   portadaOrigen?: 'pdf' | 'internet' | 'tela';
   /** Estilo de la portada de tela (índice en ESTILOS_TELA). */
   portadaTela?: number;
+  /** El marcador que dejé con el dedo sobre la línea donde me quedé. */
+  marcador?: MarcaLectura;
   /** Sonido de fondo elegido para leer este libro. */
   ambiente?: TipoAmbiente;
   /** Ya se buscó su portada en internet (o la eligió el usuario): no se vuelve a buscar sola. */
@@ -38,6 +41,12 @@ export interface Avance {
   actualizado: number;
   /** Capítulo en el que va (del índice del PDF), si lo tiene. */
   capitulo?: string;
+  /** Con zoom o de lado: a qué altura de la página iba (0 arriba, 1 abajo). */
+  cy?: number;
+  /** Cuántos segundos tardo por página en este libro (para saber cuánto falta). */
+  ritmo?: Ritmo;
+  /** Cuánto me falta, en segundos, a mi ritmo (para el estante). */
+  falta?: { libro: number; capitulo?: number };
 }
 
 interface Esquema extends DBSchema {

@@ -7,6 +7,7 @@ import { useAjustes } from '../estado/ajustes';
 import { useFrases } from '../estado/frases';
 import { useLibros } from '../estado/libros';
 import { azar } from '../frases/dibujo';
+import { tiempoLegible } from '../lectura/lugar';
 import { usePwa } from '../pwa/pwa';
 import { sonido } from '../sonido/sonido';
 import { FichaLibro } from './FichaLibro';
@@ -170,7 +171,15 @@ export function Inicio() {
               <div className="avance-t">
                 {avanceUltimo?.capitulo && <span className="cap-actual">{avanceUltimo.capitulo} · </span>}
                 pág. {miles((avanceUltimo?.pagina ?? 0) + 1)} de {miles(ultimo.paginas)}
+                {avanceUltimo?.falta && (
+                  <span className="falta-t">
+                    {avanceUltimo.falta.capitulo != null
+                      ? `${tiempoLegible(avanceUltimo.falta.capitulo)} para terminar el capítulo`
+                      : `${tiempoLegible(avanceUltimo.falta.libro)} para terminar el libro`}
+                  </span>
+                )}
               </div>
+              {ultimo.marcador?.texto && ultimo.marcador.pagina === avanceUltimo?.pagina && <div className="marca-texto">«…{ultimo.marcador.texto}…»</div>}
               <button className="btn-tinta">
                 {avanceUltimo ? 'Continuar' : 'Abrir'} <Icono nombre="arrow-right" tam={16} />
               </button>

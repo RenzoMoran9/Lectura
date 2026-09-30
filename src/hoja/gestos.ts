@@ -4,6 +4,7 @@
 //    a los lados, pasa la hoja si ya se ve el borde del texto (si no, primero lo muestra);
 //  - dos dedos: pellizco para acercar o alejar (y mover a la vez);
 //  - doble toque: ajusta el texto al ancho de la pantalla, o vuelve al tamaño normal;
+//  - dedo quieto medio segundo: pone el marcador en esa línea (o lo quita);
 //  - rueda: con Ctrl acerca hacia el cursor; sin Ctrl y con zoom, desplaza.
 // Las coordenadas son px CSS dentro del lector.
 
@@ -35,14 +36,17 @@ export interface OpcionesGestos {
   finZoom: () => void;
   /** El dedo tocó la pantalla: se detiene cualquier movimiento que viniera de antes. */
   alTocar?: () => void;
+  /** El dedo se quedó quieto medio segundo (en modo lectura): poner o quitar el marcador. */
+  mantener?: (x: number, y: number) => void;
 }
 
-type Modo = 'nada' | 'decidir' | 'pasar' | 'marcar' | 'mover' | 'pellizco' | 'esperar';
+type Modo = 'nada' | 'decidir' | 'pasar' | 'marcar' | 'mover' | 'pellizco' | 'esperar' | 'mantenido';
 
 const TOQUE_MOV = 9;
 const DECIDIR = 10;
 const TOQUE_MS = 350;
 const DOBLE_MS = 300;
+const MANTENER_MS = 500;
 
 export class Gestos {
   private punteros = new Map<number, { x: number; y: number }>();
@@ -56,6 +60,7 @@ export class Gestos {
   private soloVertical = false;
   private velocidad = { x: 0, y: 0, t: 0 };
   private inercia = 0;
+  private mantenido = 0;
 
   constructor(private o: OpcionesGestos) {}
 
@@ -75,13 +80,30 @@ export class Gestos {
       this.modo = 'pasar';
       this.o.pasar.bajar(x, y, id);
     }
+    if (this.modo !== 'marcar' && this.o.mantener) {
+      clearTimeout(this.mantenido);
+      this.mantenido = window.setTimeout(() => this.alMantener(x, y), MANTENER_MS);
+    }
+  }
+
+  /** Medio segundo con el dedo quieto: lo que empezaba a hacer se deshace y se pone el marcador. */
+  private alMantener(x: number, y: number) {
+    const t = this.toque;
+    if (!t || t.movido || this.punteros.size !== 1 || (this.modo !== 'pasar' && this.modo !== 'decidir')) return;
+    if (this.modo === 'pasar') this.o.pasar.cancelar();
+    this.modo = 'mantenido';
+    this.toque = null;
+    this.o.mantener?.(x, y);
   }
 
   mover(x: number, y: number, id: number) {
     const antes = this.punteros.get(id);
     if (!antes) return;
     this.punteros.set(id, { x, y });
-    if (this.toque && Math.hypot(x - this.toque.x, y - this.toque.y) > TOQUE_MOV) this.toque.movido = true;
+    if (this.toque && Math.hypot(x - this.toque.x, y - this.toque.y) > TOQUE_MOV) {
+      this.toque.movido = true;
+      clearTimeout(this.mantenido);
+    }
     switch (this.modo) {
       case 'decidir':
         return this.decidir(x, y, id);
@@ -129,7 +151,12 @@ export class Gestos {
   subir(x: number, y: number, id: number) {
     if (!this.punteros.has(id)) return;
     this.punteros.delete(id);
+    clearTimeout(this.mantenido);
     const modo = this.modo;
+    if (modo === 'mantenido') {
+      this.modo = 'nada';
+      return;
+    }
     if (modo === 'pellizco' || modo === 'esperar') {
       this.modo = this.punteros.size ? 'esperar' : 'nada';
       if (!this.punteros.size) this.terminarPellizco();
@@ -151,6 +178,7 @@ export class Gestos {
   cancelar(id: number) {
     if (!this.punteros.has(id)) return;
     this.punteros.delete(id);
+    clearTimeout(this.mantenido);
     if (this.modo === 'marcar') this.o.marcar.cancelar();
     if (this.modo === 'pasar') this.o.pasar.cancelar();
     if (!this.punteros.size) {
@@ -179,6 +207,7 @@ export class Gestos {
   }
 
   private empezarPellizco() {
+    clearTimeout(this.mantenido);
     // El segundo dedo manda: lo que hacía el primero se deshace.
     if (this.modo === 'pasar') this.o.pasar.cancelar();
     if (this.modo === 'marcar') this.o.marcar.cancelar();
@@ -258,6 +287,7 @@ export class Gestos {
   }
 
   destruir() {
+    clearTimeout(this.mantenido);
     clearTimeout(this.pendiente);
     clearTimeout(this.ruedaQuieta);
     cancelAnimationFrame(this.inercia);

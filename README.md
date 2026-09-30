@@ -76,6 +76,20 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   (`node scripts/generar-iconos.cjs`) y un service worker que guarda toda la app al abrirla la primera vez. Cuando
   se publica una versión nueva aparece «Hay una versión nueva · Actualizar».
 
+## Para leer mejor: dónde voy, índice y cuánto falta
+
+- **Marcador** (`src/lectura/lugar.ts`): con el dedo quieto medio segundo sobre una palabra queda una cinta roja en el
+  borde de la hoja y una raya de lápiz rojo desde esa palabra hasta el final del renglón (se dibuja en la página y se
+  curva con ella). Al volver a abrir el libro, la línea brilla y dice «Aquí te quedaste»; el estante muestra su texto.
+- **Volver a donde iba**: ir a una frase (desde Mis frases o «Para recordar hoy»), al índice o a otra página con la
+  barra ya no cambia tu lugar; aparece «Volver a la pág. … · donde ibas». Si sigues leyendo desde ahí, ese pasa a ser
+  tu lugar. También se recuerda la altura en la página (con zoom o de lado).
+- **Índice** (botón arriba, al tocar la hoja): los capítulos del PDF, los leídos con ✓ y el actual con su avance.
+- **Cuánto falta**: la app mide tu ritmo (segundos por página, sin contar saltos ni pausas largas) y dice cuánto te
+  falta para terminar el capítulo y el libro; las rayitas de la barra de abajo son los capítulos.
+- **Pantalla encendida** mientras lees (Wake Lock); si nadie la toca en 10 minutos, se deja apagar.
+- **Sonido al marcar**: lápiz, resaltador y goma, con el volumen que sigue la velocidad del dedo.
+
 ## Desarrollo
 
 ```bash
