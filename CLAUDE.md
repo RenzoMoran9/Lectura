@@ -1,6 +1,6 @@
-# Hoja a hoja — lector de libros en PDF
+# Entre Hojas — lector de libros en PDF
 
-> «Hoja a hoja» es un nombre provisional.
+> El nombre de la app es «Entre Hojas»: como lo que uno guarda entre las páginas de un libro (una flor seca, un papelito); aquí, mis frases.
 
 ## Qué quiero
 Quiero volver a leer mis libros como si fueran de papel, pero desde PDFs. Es una app donde subo un libro en PDF, del peso que sea, y lo leo pasando las hojas con el dedo, con la sensación y el sonido de un libro de verdad.

@@ -1,4 +1,4 @@
-# Hoja a hoja — lector de libros en PDF
+# Entre Hojas — lector de libros en PDF
 
 Un lector de libros en PDF que se siente como un libro de papel: la hoja se curva y sigue tu dedo, suena a papel,
 puedes elegir el tipo de papel (blanco, crema, antiguo o noche), resaltar o encerrar frases a lápiz y guardarlas en
