@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1480">
+<title>Hoja a hoja · propuesta visual</title>
+<!-- Maqueta estática del lector de libros en PDF (no es la app todavía).
+     Se convierte en imágenes con: node diseno/render.cjs -->
+<script src="iconos.js"></script>
+<style>
+@font-face{font-family:"EB Garamond";src:url(fuentes/eb-garamond-latin-400-normal.woff2) format("woff2");font-weight:400;font-style:normal}
+@font-face{font-family:"EB Garamond";src:url(fuentes/eb-garamond-latin-400-italic.woff2) format("woff2");font-weight:400;font-style:italic}
+@font-face{font-family:"EB Garamond";src:url(fuentes/eb-garamond-latin-500-normal.woff2) format("woff2");font-weight:500;font-style:normal}
+@font-face{font-family:"EB Garamond";src:url(fuentes/eb-garamond-latin-500-italic.woff2) format("woff2");font-weight:500;font-style:italic}
+@font-face{font-family:"EB Garamond";src:url(fuentes/eb-garamond-latin-600-normal.woff2) format("woff2");font-weight:600;font-style:normal}
+@font-face{font-family:"Fraunces";src:url(fuentes/fraunces-latin-400-normal.woff2) format("woff2");font-weight:400;font-style:normal}
+@font-face{font-family:"Fraunces";src:url(fuentes/fraunces-latin-400-italic.woff2) format("woff2");font-weight:400;font-style:italic}
+@font-face{font-family:"Fraunces";src:url(fuentes/fraunces-latin-500-italic.woff2) format("woff2");font-weight:500;font-style:italic}
+@font-face{font-family:"Fraunces";src:url(fuentes/fraunces-latin-600-normal.woff2) format("woff2");font-weight:600;font-style:normal}
+@font-face{font-family:"Fraunces";src:url(fuentes/fraunces-latin-700-normal.woff2) format("woff2");font-weight:700;font-style:normal}
+@font-face{font-family:"DM Sans";src:url(fuentes/dm-sans-latin-400-normal.woff2) format("woff2");font-weight:400}
+@font-face{font-family:"DM Sans";src:url(fuentes/dm-sans-latin-500-normal.woff2) format("woff2");font-weight:500}
+@font-face{font-family:"DM Sans";src:url(fuentes/dm-sans-latin-600-normal.woff2) format("woff2");font-weight:600}
+@font-face{font-family:"DM Sans";src:url(fuentes/dm-sans-latin-700-normal.woff2) format("woff2");font-weight:700}
+@font-face{font-family:"Caveat";src:url(fuentes/caveat-latin-700-normal.woff2) format("woff2");font-weight:700}
+
+:root{
+  --mesa:#E6DED0;
+  --tinta:#2A2520;
+  --tinta-2:#6A6056;
+  --tinta-3:#9A8F82;
+  --cinta:#8E2F2A;
+  --ui:#F4EEE2;
+  --ui-claro:#FBF7EF;
+  --amarillo:255,212,38;
+  --verde:138,212,92;
+  --rosa:255,136,176;
+  --celeste:100,188,240;
+  --naranja:255,158,68;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--mesa);font-family:"DM Sans",system-ui,sans-serif;color:var(--tinta);-webkit-font-smoothing:antialiased}
+.ico{width:20px;height:20px;flex:none;display:inline-block;vertical-align:middle}
+
+/* ---------- tablero de presentación ---------- */
+.tablero{width:1480px;background-color:var(--mesa);background-image:var(--grano)}
+.hoja-pres{padding:0 64px}
+.hoja-pres.h1{padding-top:54px}
+.hoja-pres.h3{padding-bottom:70px}
+.cab{display:flex;justify-content:space-between;align-items:flex-end;gap:40px;padding-bottom:26px;border-bottom:1px solid rgba(60,40,20,.16)}
+.kicker{font:600 12px "DM Sans";letter-spacing:.2em;text-transform:uppercase;color:var(--cinta)}
+.cab h1{font:600 78px/1 "Fraunces";letter-spacing:-.025em;margin:10px 0 8px}
+.lema{font:italic 400 25px/1.3 "Fraunces";margin:0;color:var(--tinta-2)}
+.nota{font:500 13.5px "DM Sans";color:var(--tinta-3);margin:12px 0 0}
+.rasgos{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,auto);gap:12px 34px;font:500 15px "DM Sans"}
+.rasgos li{display:flex;align-items:center;gap:10px}
+.rasgos .ico{width:22px;height:22px;color:var(--cinta)}
+
+.fila{display:grid;grid-template-columns:repeat(3,414px);justify-content:space-between;padding-top:46px}
+.celda{margin:0;display:flex;flex-direction:column;align-items:center}
+figcaption{width:414px;display:flex;gap:14px;margin-top:26px}
+.num{font:700 40px/0.9 "Caveat";color:var(--cinta);width:26px;flex:none;text-align:center}
+figcaption h3{font:600 21px/1.2 "Fraunces";margin:0 0 6px}
+figcaption p{font:400 14.5px/1.5 "DM Sans";margin:0;color:#4a4239}
+.leyenda{display:flex;flex-wrap:wrap;gap:6px 12px;margin:8px 0 6px;font:500 13px "DM Sans"}
+.leyenda span{display:inline-flex;align-items:center;gap:5px}
+.leyenda .ico{width:16px;height:16px}
+
+/* ---------- celular ---------- */
+.cel{width:414px;height:868px;border-radius:64px;padding:12px;position:relative;
+  background:linear-gradient(150deg,#34302c,#141210 55%,#26231f);
+  box-shadow:inset 0 0 0 1.5px #4a4540,0 40px 70px -28px rgba(60,35,10,.55),0 14px 26px -14px rgba(60,35,10,.4)}
+.pantalla{width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;isolation:isolate;background:#fff}
+.isla{position:absolute;top:11px;left:50%;width:122px;height:35px;margin-left:-61px;border-radius:20px;background:#060606;z-index:80}
+.estado{position:absolute;top:0;left:0;right:0;height:54px;padding:19px 30px 0 46px;display:flex;justify-content:space-between;font:600 15.5px "DM Sans";z-index:70;color:var(--tinta)}
+.estado.tenue{opacity:.5}
+.estado svg{margin-top:2px}
+.home{position:absolute;bottom:8px;left:50%;width:136px;height:5px;margin-left:-68px;border-radius:3px;background:var(--tinta);opacity:.32;z-index:80}
+
+/* ---------- papel ---------- */
+.paper{background-color:var(--p);background-image:var(--fibra),var(--grano),var(--mancha);color:var(--pt)}
+.p-blanco{--p:#FBFAF6;--pt:#1E1B18;background-image:var(--grano)}
+.p-crema{--p:#F5EDDB;--pt:#29221B}
+.p-antiguo{--p:#E7D3AA;--pt:#3A2C1D;
+  background-image:
+    radial-gradient(ellipse 115% 95% at 50% 46%,transparent 52%,rgba(125,78,26,.34) 100%),
+    radial-gradient(circle at 83% 17%,rgba(146,92,38,.20) 0 5px,transparent 13px),
+    radial-gradient(circle at 14% 64%,rgba(146,92,38,.14) 0 3px,transparent 10px),
+    radial-gradient(circle at 68% 86%,rgba(146,92,38,.13) 0 7px,transparent 19px),
+    radial-gradient(circle at 36% 30%,rgba(146,92,38,.08) 0 10px,transparent 26px),
+    var(--fibra),var(--grano),var(--mancha),var(--mancha)}
+.p-noche{--p:#23201C;--pt:#D6CCBA;background-image:var(--grano-claro)}
+
+/* ---------- página de libro ---------- */
+.pg,.pg-pc{position:absolute;inset:0;overflow:hidden}
+.pg{--lh:22px}
+.pg-pc{--lh:20px}
+.rh{position:absolute;left:0;right:0;text-align:center;font:500 10.5px/1 "EB Garamond";letter-spacing:.24em;text-transform:uppercase;opacity:.5}
+.pg .rh{top:64px}
+.pg-pc .rh{top:30px;font-size:10px}
+.caja{position:absolute;overflow:hidden}
+.pg .caja{left:30px;right:30px;top:94px;height:calc(var(--lh)*30)}
+.pg-pc .caja{left:46px;right:42px;top:58px;height:calc(var(--lh)*26)}
+.der .pg-pc .caja{left:42px;right:46px}
+.folio{position:absolute;left:0;right:0;text-align:center;font:400 13px/1 "EB Garamond";opacity:.6}
+.pg .folio{bottom:44px}
+.pg-pc .folio{bottom:22px;font-size:12px}
+.bk{font-family:"EB Garamond",serif;text-align:justify;hyphens:auto;-webkit-hyphens:auto;font-kerning:normal;font-variant-numeric:oldstyle-nums;line-height:var(--lh)}
+.pg .bk{font-size:15.5px}
+.pg-pc .bk{font-size:14.3px}
+.bk p{margin:0;text-indent:1.3em}
+.bk p.first,.bk p.cont{text-indent:0}
+.cap{height:calc(var(--lh)*6);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px}
+.cap-n{font:500 11px/1 "EB Garamond";letter-spacing:.26em;text-transform:uppercase}
+.cap-t{font:italic 400 16.5px/1.25 "EB Garamond";max-width:88%}
+.pg-pc .cap-t{font-size:15.5px}
+.cap svg{opacity:.55;margin-top:4px}
+.capital{float:left;font:500 calc(var(--lh)*2.55)/calc(var(--lh)*2) "EB Garamond";margin:3px 6px 0 0;color:var(--cinta)}
+.p-antiguo .capital{color:#6f2a1c}
+.pg::before{content:"";position:absolute;inset:0 auto 0 0;width:22px;background:linear-gradient(90deg,rgba(80,55,25,.13),transparent);pointer-events:none;z-index:2}
+.pg::after{content:"";position:absolute;inset:0 0 0 auto;width:5px;background:repeating-linear-gradient(90deg,rgba(90,65,35,.12) 0 1px,transparent 1px 2px);pointer-events:none}
+.sin-marcas .hl{background:none!important;padding:0;margin:0}
+
+/* resaltador */
+.hl{-webkit-box-decoration-break:clone;box-decoration-break:clone;padding:1px 2px;margin:0 -2px;border-radius:2px 6px 3px 7px/7px 3px 6px 2px;mix-blend-mode:multiply;
+  background-image:linear-gradient(100deg,rgba(var(--c),.18) 0%,rgba(var(--c),.66) 1.6%,rgba(var(--c),.52) 55%,rgba(var(--c),.64) 98.4%,rgba(var(--c),.2) 100%)}
+
+/* ---------- pantallas de interfaz ---------- */
+.ui{background-color:var(--ui);background-image:var(--grano)}
+.scroll{position:absolute;inset:0;padding:62px 20px 0}
+.saludo{font:500 13px "DM Sans";color:var(--tinta-2);letter-spacing:.02em;margin-top:6px}
+.titulo-fila{display:flex;align-items:center;justify-content:space-between}
+.titulo-fila h2{font:600 34px/1.1 "Fraunces";margin:2px 0 14px;letter-spacing:-.015em}
+.icono-btn{width:42px;height:42px;border-radius:50%;background:rgba(60,40,20,.07);display:grid;place-items:center;color:var(--tinta);margin-top:-10px}
+.seguir{position:relative;display:flex;gap:16px;padding:16px;border-radius:18px;
+  box-shadow:0 0 0 1px rgba(60,40,20,.08),0 12px 26px -16px rgba(60,35,10,.55)}
+.seguir .portada{width:94px;height:138px}
+.eti{font:600 10.5px "DM Sans";letter-spacing:.14em;text-transform:uppercase;color:var(--cinta);display:flex;align-items:center;gap:6px}
+.eti .ico{width:14px;height:14px}
+.libro-t{font:600 19px/1.15 "Fraunces";margin-top:7px}
+.libro-a{font:italic 400 14px "Fraunces";color:var(--tinta-2);margin-top:3px}
+.avance{height:4px;border-radius:2px;background:rgba(60,40,20,.12);margin-top:14px;overflow:hidden;width:170px}
+.avance span{display:block;height:100%;background:var(--cinta)}
+.avance-t{font:500 12px "DM Sans";color:var(--tinta-2);margin-top:6px}
+.btn-tinta{margin-top:11px;background:var(--tinta);color:#F7F0E2;border-radius:22px;padding:9px 14px 9px 16px;font:600 13.5px "DM Sans";display:inline-flex;gap:6px;align-items:center}
+.btn-tinta .ico{width:16px;height:16px}
+.cinta{position:absolute;top:-3px;right:22px;width:15px;height:46px;background:linear-gradient(90deg,#7d2622,#9c3a33 50%,#7d2622);clip-path:polygon(0 0,100% 0,100% 100%,50% 80%,0 100%)}
+.recordar{margin-top:14px;padding:14px 16px 13px;border-radius:16px;background:rgba(255,253,248,.55);border:1px dashed rgba(60,40,20,.22)}
+.recordar .frase{font:italic 400 19px/1.35 "EB Garamond";margin:8px 0 6px}
+.meta{font:500 11.5px "DM Sans";color:var(--tinta-2)}
+.titulo-sec{display:flex;justify-content:space-between;align-items:baseline;margin:22px 0 12px}
+.titulo-sec b{font:600 18px "Fraunces"}
+.titulo-sec span{font:500 12px "DM Sans";color:var(--tinta-2)}
+.rejilla{display:grid;grid-template-columns:repeat(3,104px);justify-content:space-between;row-gap:18px}
+.mini-av{height:3px;background:rgba(60,40,20,.12);border-radius:2px;margin-top:10px;overflow:hidden}
+.mini-av span{display:block;height:100%;background:var(--tinta-2)}
+.lib-t{font:500 11.5px "DM Sans";color:var(--tinta-2);margin-top:5px}
+.subir{position:absolute;right:18px;bottom:104px;z-index:20;background:var(--cinta);color:#FBF3E6;border-radius:28px;padding:14px 20px 14px 16px;font:600 15px "DM Sans";display:flex;gap:8px;align-items:center;box-shadow:0 14px 26px -10px rgba(110,30,25,.65)}
+.pestanas{position:absolute;left:0;right:0;bottom:0;height:88px;padding:11px 70px 0;display:flex;justify-content:space-around;z-index:15;
+  background:var(--ui);border-top:1px solid rgba(60,40,20,.1)}
+.pestanas::before{content:"";position:absolute;left:0;right:0;top:-44px;height:44px;background:linear-gradient(rgba(244,238,226,0),var(--ui))}
+.pestanas a{display:flex;flex-direction:column;align-items:center;gap:4px;font:600 11.5px "DM Sans";color:var(--tinta-3)}
+.pestanas a.on{color:var(--tinta)}
+.pestanas .ico{width:24px;height:24px}
+
+/* portadas (dibujadas con CSS, propias) */
+.portada{position:relative;width:104px;height:152px;border-radius:2px 6px 6px 2px;overflow:hidden;flex:none;
+  background-color:var(--c1);color:var(--c2);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:12px 10px 12px 14px;
+  box-shadow:0 1px 1px rgba(0,0,0,.18),0 10px 18px -8px rgba(40,20,5,.55)}
+.portada::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(90deg,rgba(0,0,0,.30) 0,rgba(255,255,255,.16) 3px,rgba(0,0,0,.10) 7px,transparent 13px),var(--grano)}
+.portada > *{position:relative}
+.quijote{--c1:#7B2530;--c2:#E2C27A}
+.quijote .marco{position:absolute;inset:8px 7px 8px 12px;border:1px solid rgba(226,194,122,.75);outline:1px solid rgba(226,194,122,.35);outline-offset:-4px}
+.quijote .t1{font:600 12.5px/1.05 "Fraunces";letter-spacing:.06em;text-transform:uppercase}
+.quijote .t2{font:italic 400 10.5px/1.2 "Fraunces";margin-top:3px}
+.quijote .t3{font:500 7.5px "DM Sans";letter-spacing:.2em;text-transform:uppercase;margin-top:12px;opacity:.9}
+.medita{--c1:#2E4A3B;--c2:#EFE6CF}
+.medita .aro{width:44px;height:44px;border-radius:50%;border:1px dashed rgba(239,230,207,.65);display:grid;place-items:center;font:italic 500 18px "Fraunces";margin-bottom:9px}
+.medita .t1{font:italic 400 14px/1.1 "Fraunces"}
+.medita .t3{font:500 7px "DM Sans";letter-spacing:.2em;text-transform:uppercase;margin-top:7px;opacity:.85}
+.heraldos{--c1:#1E1C1A;--c2:#EDE6D6;align-items:flex-start;text-align:left;justify-content:flex-end}
+.heraldos::after{content:"";position:absolute;left:18px;top:14px;width:2px;height:48px;background:#B23A2E}
+.heraldos .t1{font:italic 400 17px/1.02 "Fraunces"}
+.heraldos .t3{font:500 7.5px "DM Sans";letter-spacing:.18em;text-transform:uppercase;margin-top:8px;opacity:.8}
+.tradic{--c1:#C4913F;--c2:#3A2412;border-top:9px solid #3A2412;border-bottom:9px solid #3A2412}
+.tradic .t1{font:700 11.5px/1.15 "Fraunces";letter-spacing:.05em;text-transform:uppercase}
+.tradic .t3{font:italic 400 10px "Fraunces";margin-top:8px}
+.walden{--c1:#233650;--c2:#E9E1CC}
+.walden .t1{font:600 17px "Fraunces";letter-spacing:.22em}
+.walden .t2{font:italic 400 9px/1.2 "Fraunces";margin-top:3px;opacity:.9}
+.walden svg{margin-top:10px}
+.walden .t3{font:500 7px "DM Sans";letter-spacing:.2em;text-transform:uppercase;margin-top:8px;opacity:.85}
+.guerra{--c1:#A3321F;--c2:#1C1512}
+.guerra .sol{width:40px;height:40px;border-radius:50%;background:#1C1512;margin-bottom:10px}
+.guerra .t1{font:700 12.5px/1.1 "Fraunces"}
+.guerra .t3{font:500 7.5px "DM Sans";letter-spacing:.2em;text-transform:uppercase;margin-top:7px}
+
+/* ---------- pantalla: pasar hoja ---------- */
+.curl{position:absolute;inset:0}
+.curl > .under{z-index:1}
+.curl > .cur{z-index:2}
+.solapa-caja{position:absolute;inset:0;z-index:3;pointer-events:none}
+.solapa{position:absolute;left:0;top:0;transform-origin:0 0}
+.velo-solapa{position:absolute;inset:0;background:var(--p);opacity:.92;z-index:3}
+.dedo{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;z-index:6;
+  background:radial-gradient(circle,rgba(255,255,255,.55),rgba(255,255,255,.18));
+  box-shadow:0 0 0 2px rgba(42,37,32,.28),0 0 0 10px rgba(42,37,32,.06),0 6px 14px rgba(40,25,10,.18)}
+.rastro{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:visible}
+
+/* botón del menú (cerrado) */
+.fab{position:absolute;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;display:grid;place-items:center;z-index:30;
+  background:rgba(251,247,239,.62);color:rgba(42,37,32,.8);box-shadow:0 0 0 1px rgba(60,40,20,.12),0 6px 16px -6px rgba(50,30,10,.35)}
+.fab .ico{width:22px;height:22px}
+
+/* ---------- pantalla: menú circular ---------- */
+.modo{position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:40;display:flex;align-items:center;gap:8px;white-space:nowrap;
+  background:rgba(42,37,32,.93);color:#F5EDDB;font:500 12.5px/1 "DM Sans";padding:6px 6px 6px 12px;border-radius:20px;box-shadow:0 8px 18px -8px rgba(0,0,0,.4)}
+.modo .ico{width:15px;height:15px}
+.modo b{background:#F5EDDB;color:var(--tinta);padding:6px 11px;border-radius:14px;font-weight:600}
+.radial{position:absolute;inset:0;z-index:30;pointer-events:none}
+.r-fondo{position:absolute;border-radius:50%;background:radial-gradient(circle,rgba(251,247,239,0) 0 36px,rgba(251,247,239,.78) 37px);box-shadow:0 0 0 1px rgba(60,40,20,.07),0 0 40px rgba(60,40,20,.10)}
+.r-item{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;background:var(--ui-claro);display:grid;place-items:center;color:var(--tinta);
+  box-shadow:0 0 0 1px rgba(60,40,20,.10),0 7px 14px -6px rgba(50,30,10,.45)}
+.r-item .ico{width:22px;height:22px}
+.r-item.on{background:var(--tinta);color:#FBF3E4}
+.r-dot{position:absolute;right:0;bottom:0;width:15px;height:15px;border-radius:50%;background:rgb(var(--c));box-shadow:0 0 0 2.5px var(--ui-claro)}
+.r-ancla{position:absolute;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:var(--tinta);color:#FBF3E4;display:grid;place-items:center;box-shadow:0 8px 18px -6px rgba(0,0,0,.45)}
+.r-colores{position:absolute;border-radius:18px;background:var(--ui-claro);padding:8px 11px 10px;box-shadow:0 0 0 1px rgba(60,40,20,.10),0 8px 18px -8px rgba(50,30,10,.45)}
+.r-colores small{display:block;font:600 10px "DM Sans";letter-spacing:.12em;text-transform:uppercase;color:var(--tinta-2)}
+.r-colores div{display:flex;gap:8px;margin-top:7px}
+.r-colores b{width:22px;height:22px;border-radius:50%;background:rgb(var(--c));box-shadow:inset 0 -2px 0 rgba(0,0,0,.12)}
+.r-colores b.sel{box-shadow:0 0 0 2px var(--ui-claro),0 0 0 4px var(--tinta)}
+.aviso{position:absolute;z-index:25;display:flex;align-items:center;gap:5px;white-space:nowrap;background:var(--tinta);color:#F5EDDB;font:600 11px/1 "DM Sans";padding:6px 9px 6px 7px;border-radius:12px;box-shadow:0 6px 12px -6px rgba(0,0,0,.5)}
+.aviso .ico{width:13px;height:13px;color:#9ad97a}
+.toque{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;z-index:24;background:rgba(255,255,255,.4);box-shadow:0 0 0 2px rgba(42,37,32,.3),0 0 0 8px rgba(42,37,32,.06)}
+
+/* ---------- pantalla: papel y sonido ---------- */
+.velo{position:absolute;inset:0;background:rgba(35,22,10,.24);z-index:20}
+.ajustes{position:absolute;left:0;right:0;bottom:0;height:452px;z-index:30;border-radius:28px 28px 0 0;padding:12px 22px 0;
+  background-color:var(--ui-claro);background-image:var(--grano);box-shadow:0 -12px 30px -10px rgba(40,25,10,.35)}
+.asa{width:40px;height:5px;border-radius:3px;background:rgba(60,40,20,.2);margin:0 auto 14px}
+.ajustes h3{font:600 22px "Fraunces";margin:0 0 14px}
+.eti-sec{font:600 10.5px "DM Sans";letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-2);margin-bottom:10px}
+.muestras{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.muestra .m{position:relative;height:96px;border-radius:8px;display:grid;place-items:center;font:500 27px "EB Garamond";box-shadow:0 0 0 1px rgba(60,40,20,.14),0 6px 12px -8px rgba(60,35,10,.5)}
+.muestra span{display:block;text-align:center;font:500 12.5px "DM Sans";margin-top:7px;color:var(--tinta-2)}
+.muestra.on .m{box-shadow:0 0 0 2.5px var(--tinta),0 6px 12px -8px rgba(60,35,10,.5)}
+.muestra.on span{color:var(--tinta);font-weight:700}
+.muestra .ok{position:absolute;top:-7px;right:-7px;width:22px;height:22px;padding:4px;border-radius:50%;background:var(--tinta);color:#fff}
+.sep{height:1px;background:rgba(60,40,20,.12);margin:18px 0 14px}
+.fila-aj{display:flex;align-items:center;gap:10px;font:500 15px "DM Sans"}
+.fila-aj span{flex:1}
+.switch{width:48px;height:29px;border-radius:15px;background:var(--tinta);position:relative}
+.switch::after{content:"";position:absolute;top:3px;right:3px;width:23px;height:23px;border-radius:50%;background:#FBF7EF}
+.vol{display:flex;align-items:center;gap:12px;margin:14px 0 14px 30px}
+.vol small{font:500 12px "DM Sans";color:var(--tinta-2)}
+.riel-vol{position:relative;flex:1;height:4px;border-radius:2px;background:rgba(60,40,20,.15)}
+.riel-vol i{position:absolute;left:0;top:0;bottom:0;width:68%;border-radius:2px;background:var(--tinta)}
+.riel-vol b{position:absolute;left:68%;top:50%;width:20px;height:20px;margin:-10px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(60,40,20,.2),0 3px 6px rgba(0,0,0,.2)}
+.seg{display:flex;background:rgba(60,40,20,.07);border-radius:12px;padding:3px;margin-left:30px}
+.seg span{flex:1;text-align:center;padding:8px 0;border-radius:9px;font:500 13px "DM Sans";color:var(--tinta-2)}
+.seg span.on{background:#fff;color:var(--tinta);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.probar{display:inline-flex;align-items:center;gap:6px;margin:14px 0 0 30px;font:600 13px "DM Sans";color:var(--cinta)}
+.probar .ico{width:15px;height:15px}
+
+/* ---------- pantalla: mis frases ---------- */
+.volver{display:flex;align-items:center;gap:1px;font:500 14px "DM Sans";color:var(--cinta);margin:4px 0 0 -6px}
+.repasar{border:1px solid rgba(60,40,20,.2);background:rgba(255,255,255,.5);border-radius:20px;padding:8px 13px 8px 11px;font:600 13px "DM Sans";display:flex;gap:6px;align-items:center;margin-top:-8px}
+.repasar .ico{width:16px;height:16px}
+.sub{font:500 13px "DM Sans";color:var(--tinta-2);margin-top:-8px}
+.buscar{margin-top:14px;height:42px;border-radius:12px;background:rgba(60,40,20,.06);display:flex;align-items:center;gap:8px;padding:0 12px;color:var(--tinta-3);font:500 14px "DM Sans"}
+.buscar .ico{width:18px;height:18px}
+.chips{display:flex;gap:7px;margin-top:12px;white-space:nowrap}
+.chips span{padding:7px 12px;border-radius:16px;border:1px solid rgba(60,40,20,.16);font:500 12.5px "DM Sans";display:flex;align-items:center;gap:5px}
+.chips span.on{background:var(--tinta);color:#F6EFE1;border-color:var(--tinta)}
+.chips i.pto{width:10px;height:10px;border-radius:50%;background:rgb(var(--c));display:inline-block}
+.grupo{font:600 10.5px "DM Sans";letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-3);margin:18px 2px 8px}
+.tarjeta{position:relative;padding:16px 16px 12px;border-radius:14px;margin-bottom:10px;background-color:#FBF6EC;background-image:var(--grano);
+  box-shadow:0 0 0 1px rgba(60,40,20,.07),0 7px 16px -11px rgba(60,35,10,.4)}
+.tarjeta .q{font:400 18.5px/1.42 "EB Garamond";margin:0 0 9px;color:var(--tinta)}
+.tarjeta .meta{display:flex;justify-content:space-between;align-items:center}
+.tarjeta .meta a{color:var(--cinta);font-weight:600;display:flex;gap:4px;align-items:center}
+.tarjeta .meta .ico{width:14px;height:14px}
+
+/* ---------- lámina de materiales ---------- */
+.lamina{position:relative;width:414px;height:868px;border-radius:30px;padding:30px 30px 0;
+  box-shadow:0 0 0 1px rgba(60,40,20,.08),0 40px 70px -30px rgba(60,35,10,.45)}
+.lam-t{font:600 30px/1 "Fraunces";margin:0}
+.lam-d{font:italic 400 15px/1.35 "Fraunces";color:var(--tinta-2);margin:8px 0 0}
+.lam-sec{font:600 10.5px "DM Sans";letter-spacing:.16em;text-transform:uppercase;color:var(--cinta);margin:20px 0 10px}
+.papeles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.pap .sw{height:84px;border-radius:6px;display:grid;place-items:center;font:500 25px "EB Garamond";box-shadow:0 0 0 1px rgba(60,40,20,.12),0 6px 12px -8px rgba(60,35,10,.5)}
+.pap b{display:block;font:600 12.5px "DM Sans";margin-top:7px}
+.pap small{display:block;font:400 11px/1.25 "DM Sans";color:var(--tinta-2)}
+.marcadores{display:grid;grid-template-columns:repeat(5,1fr);gap:9px}
+.trazo{display:block;height:20px;border-radius:3px 9px 4px 10px/10px 4px 9px 3px;transform:rotate(-3deg);
+  background:linear-gradient(100deg,rgba(var(--c),.2),rgba(var(--c),.85) 7%,rgba(var(--c),.66) 60%,rgba(var(--c),.85) 93%,rgba(var(--c),.3))}
+.marc small{display:block;text-align:center;margin-top:7px;font:500 11px "DM Sans";color:var(--tinta-2)}
+.lapices{position:relative;display:flex;gap:40px;padding:6px 18px;white-space:nowrap;font:italic 400 17px "EB Garamond"}
+.tacto .riel-t{position:relative;display:flex;height:38px;border-radius:10px;overflow:hidden;box-shadow:0 0 0 1px rgba(60,40,20,.14)}
+.tacto .z{flex:1;display:flex;align-items:center;gap:6px;font:600 12.5px "DM Sans";padding:0 12px}
+.tacto .z .ico{width:15px;height:15px}
+.tacto .z1{background:rgba(255,255,255,.55);color:var(--tinta-2)}
+.tacto .z2{background:rgba(142,47,42,.12);color:var(--cinta);justify-content:flex-end}
+.tacto .mitad{position:absolute;left:50%;top:0;bottom:0;border-left:1.5px dashed rgba(60,40,20,.4)}
+.tacto .pd{position:absolute;left:36%;top:50%;width:20px;height:20px;margin:-10px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(42,37,32,.45),0 0 0 7px rgba(42,37,32,.07)}
+.tacto-lbl{display:flex;justify-content:space-between;font:500 10.5px "DM Sans";color:var(--tinta-3);margin-top:5px}
+.tacto p{font:400 12.5px/1.45 "DM Sans";color:#4a4239;margin:6px 0 0}
+.sonidos{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.onda{display:block;width:100%;height:36px;color:var(--tinta)}
+.son b{display:block;font:600 13px "DM Sans";margin-top:6px}
+.son small{display:block;font:400 11.5px/1.35 "DM Sans";color:var(--tinta-2)}
+.letras{display:flex;justify-content:space-between;align-items:baseline}
+.letras div{display:flex;flex-direction:column}
+.letras small{font:400 11px "DM Sans";color:var(--tinta-2);margin-top:2px}
+.f-t{font:600 21px "Fraunces"}
+.f-u{font:600 18px "DM Sans"}
+.f-l{font:italic 400 20px "EB Garamond"}
+
+/* ---------- computadora ---------- */
+.fila-pc{padding-top:60px;display:flex;flex-direction:column;align-items:center}
+.pc{width:1352px;border-radius:14px;overflow:hidden;background:#1a1816;box-shadow:0 44px 90px -34px rgba(50,30,10,.6),0 0 0 1px rgba(0,0,0,.35)}
+.pc-barra{height:38px;background:#E7E0D3;display:flex;align-items:center;position:relative;border-bottom:1px solid rgba(0,0,0,.12)}
+.luces{display:flex;gap:8px;padding-left:16px;position:relative;z-index:1}
+.luces i{width:12px;height:12px;border-radius:50%;background:#E0625A}
+.luces i:nth-child(2){background:#E6B84E}
+.luces i:nth-child(3){background:#7CBF5A}
+.pc-titulo{position:absolute;left:0;right:0;text-align:center;font:500 13px "DM Sans";color:#5a5048}
+.pc-cuerpo{display:flex;height:770px}
+.pc-lectura{position:relative;flex:1;overflow:hidden;background:radial-gradient(ellipse 72% 64% at 50% 46%,#5a4c3d 0%,#3a3128 55%,#211c18 100%)}
+.pc-top{position:absolute;top:0;left:0;right:0;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;color:#EDE4D3;font:500 13.5px "DM Sans"}
+.pc-top > span{display:flex;align-items:center;gap:6px;opacity:.85}
+.pc-top .pc-libro{font:italic 400 15px "Fraunces";opacity:.75}
+.pc-top .pc-acc{gap:18px}
+.pc-top .ico{width:19px;height:19px}
+.libro{position:absolute;left:50%;top:66px;width:880px;height:620px;margin-left:-440px}
+.tapa{position:absolute;inset:-8px -10px -10px -10px;border-radius:5px;background:linear-gradient(90deg,#5e1a22,#7a2530 8%,#6b1f28 50%,#7a2530 92%,#5e1a22);box-shadow:0 34px 50px -18px rgba(0,0,0,.75)}
+.dpage{position:absolute;top:0;width:440px;height:620px}
+.dpage.izq{left:0;box-shadow:-1px 1px 0 #efe6d3,-2px 2px 0 #d7cbb2,-3px 2px 0 #ede3cf,-4px 3px 0 #d3c6ab,-5px 3px 0 #e9dfca}
+.dpage.der{left:440px;box-shadow:1px 1px 0 #efe6d3,2px 2px 0 #d7cbb2,3px 2px 0 #ede3cf,4px 3px 0 #d3c6ab,5px 3px 0 #e9dfca}
+.izq .pg-pc::before,.dpage.izq.pg-pc::before{content:"";position:absolute;inset:0 0 0 auto;width:70px;background:linear-gradient(270deg,rgba(70,45,20,.30),rgba(70,45,20,.10) 22px,transparent);pointer-events:none;z-index:2}
+.der .pg-pc::before{content:"";position:absolute;inset:0 auto 0 0;width:70px;background:linear-gradient(90deg,rgba(70,45,20,.30),rgba(70,45,20,.10) 22px,transparent);pointer-events:none;z-index:2}
+.pc-scrub{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:14px;color:#EDE4D3;font:500 12.5px "DM Sans";opacity:.8;white-space:nowrap}
+.riel{width:380px;height:3px;background:rgba(255,255,255,.22);border-radius:2px;position:relative}
+.riel b{position:absolute;left:1.2%;top:50%;width:13px;height:13px;margin:-6.5px;border-radius:50%;background:#F4ECDD}
+.cursor{position:absolute;z-index:8;width:40px;height:40px;margin:-8px 0 0 -8px;border-radius:50%;background:#fff;display:grid;place-items:center;color:#222;box-shadow:0 4px 12px rgba(0,0,0,.35)}
+.cursor .ico{width:22px;height:22px}
+.pc-panel{width:340px;flex:none;padding:24px 20px;overflow:hidden;background-color:var(--ui);background-image:var(--grano);border-left:1px solid rgba(0,0,0,.2)}
+.pp-cab{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
+.pp-cab h4{font:600 22px "Fraunces";margin:0}
+.pp-cab span{font:500 12px "DM Sans";color:var(--tinta-2)}
+.pc-panel .tarjeta .q{font-size:17px}
+.pc-panel .repasar{margin-top:6px;justify-content:center;width:100%;padding:11px}
+.pc-cap{width:1352px;display:grid;grid-template-columns:26px 1fr 1fr;gap:14px 40px;margin-top:28px}
+.pc-cap p{font:400 14.5px/1.5 "DM Sans";margin:0;color:#4a4239}
+.pc-cap h3{font:600 21px/1.2 "Fraunces";margin:0 0 6px}
+</style>
+</head>
+<body>
+<main class="tablero">
+
+<!-- =================== HOJA 1: cabecera + celular (1–3) =================== -->
+<section class="hoja-pres h1" id="hoja1">
+  <header class="cab">
+    <div>
+      <div class="kicker">Propuesta visual · v1</div>
+      <h1>Hoja a hoja</h1>
+      <p class="lema">Un lector de libros en PDF que se siente como un libro de papel.</p>
+      <p class="nota">Nombre provisional. Así se vería en el celular y en la computadora.</p>
+    </div>
+    <ul class="rasgos">
+      <li><i data-i="book-open"></i>La hoja se curva y sigue tu dedo</li>
+      <li><i data-i="volume-2"></i>Suena a papel de verdad</li>
+      <li><i data-i="file"></i>Papel blanco, crema, antiguo o noche</li>
+      <li><i data-i="highlighter"></i>Resaltador y lápiz para encerrar</li>
+      <li><i data-i="quote"></i>Tus frases guardadas para repasar</li>
+      <li><i data-i="bookmark"></i>Abre donde te quedaste</li>
+    </ul>
+  </header>
+
+  <div class="fila">
+    <!-- 1 · Estante -->
+    <figure class="celda">
+      <div class="cel"><div class="pantalla ui" data-estado="">
+        <div class="scroll">
+          <div class="saludo">Buenas noches</div>
+          <div class="titulo-fila"><h2>Mi estante</h2><span class="icono-btn"><i data-i="search"></i></span></div>
+          <div class="seguir paper p-crema">
+            <div class="portada quijote"><div class="marco"></div><div class="t1">Don<br>Quijote</div><div class="t2">de la Mancha</div><div class="t3">Cervantes</div></div>
+            <div>
+              <div class="eti">Seguir leyendo</div>
+              <div class="libro-t">Don Quijote de la Mancha</div>
+              <div class="libro-a">Miguel de Cervantes</div>
+              <div class="avance"><span style="width:3%"></span></div>
+              <div class="avance-t">Cap. I · pág. 12 de 1 056</div>
+              <span class="btn-tinta">Continuar <i data-i="arrow-right"></i></span>
+            </div>
+            <div class="cinta"></div>
+          </div>
+          <div class="recordar">
+            <div class="eti"><i data-i="sparkles"></i>Para recordar hoy</div>
+            <p class="frase"><span class="hl" style="--c:var(--verde)">Muy poco se necesita para hacer una vida feliz.</span></p>
+            <div class="meta">Meditaciones · Marco Aurelio · pág. 43</div>
+          </div>
+          <div class="titulo-sec"><b>Mis libros</b><span>6 libros · recientes</span></div>
+          <div class="rejilla">
+            <div class="lib"><div class="portada quijote"><div class="marco"></div><div class="t1">Don<br>Quijote</div><div class="t2">de la Mancha</div><div class="t3">Cervantes</div></div><div class="mini-av"><span style="width:3%"></span></div><div class="lib-t">1 %</div></div>
+            <div class="lib"><div class="portada medita"><div class="aro">M</div><div class="t1">Meditaciones</div><div class="t3">Marco Aurelio</div></div><div class="mini-av"><span style="width:64%"></span></div><div class="lib-t">64 %</div></div>
+            <div class="lib"><div class="portada heraldos"><div class="t1">Los<br>heraldos<br>negros</div><div class="t3">César Vallejo</div></div><div class="mini-av"><span style="width:100%"></span></div><div class="lib-t">Leído ✓</div></div>
+            <div class="lib"><div class="portada tradic"><div class="t1">Tradiciones<br>peruanas</div><div class="t3">Ricardo Palma</div></div><div class="mini-av"><span style="width:22%"></span></div><div class="lib-t">22 %</div></div>
+            <div class="lib"><div class="portada walden"><div class="t1">WALDEN</div><div class="t2">o la vida en los bosques</div><svg width="46" height="18" viewBox="0 0 46 18" fill="none" stroke="currentColor" stroke-width="1.1" opacity=".8"><path d="M1 17 11 5l6 7 7-10 8 9 5-4 8 10Z"/></svg><div class="t3">Thoreau</div></div><div class="mini-av"><span style="width:0%"></span></div><div class="lib-t">Nuevo</div></div>
+            <div class="lib"><div class="portada guerra"><div class="sol"></div><div class="t1">El arte<br>de la guerra</div><div class="t3">Sun Tzu</div></div><div class="mini-av"><span style="width:41%"></span></div><div class="lib-t">41 %</div></div>
+          </div>
+        </div>
+        <span class="subir"><i data-i="plus"></i>Subir PDF</span>
+        <nav class="pestanas"><a class="on"><i data-i="library"></i>Estante</a><a><i data-i="quote"></i>Mis frases</a></nav>
+      </div></div>
+      <figcaption><div class="num">1</div><div>
+        <h3>Tu estante</h3>
+        <p>Tus libros con portada y cuánto llevas. «Continuar» abre en la página exacta donde te quedaste. «Subir PDF» acepta libros de cualquier tamaño y los guarda tal cual, sin convertirlos.</p>
+      </div></figcaption>
+    </figure>
+
+    <!-- 2 · Pasar la hoja -->
+    <figure class="celda">
+      <div class="cel"><div class="pantalla" data-estado="tenue">
+        <div class="curl" id="curl-cel">
+          <div class="under paper p-crema pg sin-marcas" data-pagina="p13" data-folio="13"></div>
+          <div class="cur paper p-crema pg sin-marcas" data-pagina="p12" data-folio="12"></div>
+        </div>
+        <div class="fab" style="left:338px;top:772px"><i data-i="highlighter"></i></div>
+      </div></div>
+      <figcaption><div class="num">2</div><div>
+        <h3>Pasar la hoja con el dedo</h3>
+        <p>La hoja se curva y sigue tu dedo todo el camino, con su sombra y el papel asomando por detrás. Si sueltas antes de la mitad, regresa; pasada la mitad, cae sola. Suena a papel: un roce mientras arrastras y un golpecito suave al asentarse.</p>
+      </div></figcaption>
+    </figure>
+
+    <!-- 3 · Menú circular -->
+    <figure class="celda">
+      <div class="cel"><div class="pantalla" data-estado="tenue">
+        <div class="paper p-crema pg" id="pg-menu" data-pagina="p13" data-folio="13"></div>
+        <div class="modo"><i data-i="highlighter"></i>Resaltando · la hoja no se pasa<b>Listo</b></div>
+        <div class="radial" data-ax="338" data-ay="772" data-r="126">
+          <div class="r-fondo"></div>
+          <div class="r-item on" data-ang="180"><i data-i="highlighter"></i><span class="r-dot" style="--c:var(--amarillo)"></span></div>
+          <div class="r-item" data-ang="202.5"><i data-i="encerrar"></i></div>
+          <div class="r-item" data-ang="225"><i data-i="eraser"></i></div>
+          <div class="r-item" data-ang="247.5"><i data-i="file"></i></div>
+          <div class="r-item" data-ang="270"><i data-i="quote"></i></div>
+          <div class="r-ancla"><i data-i="x"></i></div>
+          <div class="r-colores"><small>Resaltador</small><div><b class="sel" style="--c:var(--amarillo)"></b><b style="--c:var(--verde)"></b><b style="--c:var(--rosa)"></b><b style="--c:var(--celeste)"></b><b style="--c:var(--naranja)"></b></div></div>
+        </div>
+      </div></div>
+      <figcaption><div class="num">3</div><div>
+        <h3>Menú de la esquina</h3>
+        <p>Un botón chico y semitransparente que puedes mover a cualquier borde. Al tocarlo se abre en abanico:</p>
+        <div class="leyenda"><span><i data-i="highlighter"></i>Resaltador (5 colores)</span><span><i data-i="encerrar"></i>Encerrar con lápiz</span><span><i data-i="eraser"></i>Borrar</span><span><i data-i="file"></i>Papel</span><span><i data-i="quote"></i>Mis frases</span></div>
+        <p>Mientras resaltas, la hoja no se pasa: así no se confunden los gestos.</p>
+      </div></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- =================== HOJA 2: celular (4–5) + materiales =================== -->
+<section class="hoja-pres" id="hoja2">
+  <div class="fila">
+    <!-- 4 · Papel y sonido -->
+    <figure class="celda">
+      <div class="cel"><div class="pantalla" data-estado="tenue">
+        <div class="paper p-antiguo pg sin-marcas" data-pagina="p12" data-folio="12"></div>
+        <div class="velo"></div>
+        <div class="ajustes">
+          <div class="asa"></div>
+          <h3>Papel y sonido</h3>
+          <div class="eti-sec">Tipo de papel</div>
+          <div class="muestras">
+            <div class="muestra"><div class="m paper p-blanco">Aa</div><span>Blanco</span></div>
+            <div class="muestra"><div class="m paper p-crema">Aa</div><span>Crema</span></div>
+            <div class="muestra on"><div class="m paper p-antiguo">Aa<i data-i="check" class="ok"></i></div><span>Antiguo</span></div>
+            <div class="muestra"><div class="m paper p-noche">Aa</div><span>Noche</span></div>
+          </div>
+          <div class="sep"></div>
+          <div class="fila-aj"><i data-i="volume-2"></i><span>Sonido al pasar la hoja</span><div class="switch"></div></div>
+          <div class="vol"><small>Volumen</small><div class="riel-vol"><i></i><b></b></div></div>
+          <div class="seg"><span>Libro nuevo</span><span class="on">Libro antiguo</span></div>
+          <span class="probar"><i data-i="play"></i>Probar sonido</span>
+        </div>
+      </div></div>
+      <figcaption><div class="num">4</div><div>
+        <h3>Papel y sonido</h3>
+        <p>Blanco, crema, antiguo (amarillento, con bordes tostados y alguna manchita) o noche. Es una capa encima de la página: el PDF no se toca. El sonido se regula o se apaga.</p>
+      </div></figcaption>
+    </figure>
+
+    <!-- 5 · Mis frases -->
+    <figure class="celda">
+      <div class="cel"><div class="pantalla ui" data-estado="">
+        <div class="scroll">
+          <div class="volver"><i data-i="chevron-left"></i>Estante</div>
+          <div class="titulo-fila" style="margin-top:6px"><h2>Mis frases</h2><span class="repasar"><i data-i="shuffle"></i>Repasar</span></div>
+          <div class="sub">23 frases · 4 libros</div>
+          <div class="buscar"><i data-i="search"></i>Buscar en tus frases</div>
+          <div class="chips"><span class="on">Todas</span><span>Don Quijote</span><span>Meditaciones</span><span><i class="pto" style="--c:var(--amarillo)"></i><i class="pto" style="--c:var(--verde)"></i><i class="pto" style="--c:var(--rosa)"></i></span></div>
+          <div class="grupo">Don Quijote de la Mancha</div>
+          <article class="tarjeta">
+            <p class="q"><span class="lazo-obj" data-lazo="grafito">«La razón de la sinrazón que a mi razón se hace»</span></p>
+            <div class="meta"><span>Pág. 13 · hoy</span><a>Ir a la página<i data-i="arrow-right"></i></a></div>
+          </article>
+          <article class="tarjeta">
+            <p class="q"><span class="hl" style="--c:var(--amarillo)">Del poco dormir y del mucho leer, se le secó el celebro.</span></p>
+            <div class="meta"><span>Pág. 13 · hoy</span><a>Ir a la página<i data-i="arrow-right"></i></a></div>
+          </article>
+          <div class="grupo">Meditaciones</div>
+          <article class="tarjeta">
+            <p class="q"><span class="hl" style="--c:var(--verde)">Muy poco se necesita para hacer una vida feliz.</span></p>
+            <div class="meta"><span>Pág. 43 · hace 3 días</span><a>Ir a la página<i data-i="arrow-right"></i></a></div>
+          </article>
+          <div class="grupo">Los heraldos negros</div>
+          <article class="tarjeta">
+            <p class="q"><span class="hl" style="--c:var(--rosa)">Hay golpes en la vida, tan fuertes… ¡Yo no sé!</span></p>
+            <div class="meta"><span>Pág. 9 · la semana pasada</span><a>Ir a la página<i data-i="arrow-right"></i></a></div>
+          </article>
+        </div>
+        <nav class="pestanas"><a><i data-i="library"></i>Estante</a><a class="on"><i data-i="quote"></i>Mis frases</a></nav>
+      </div></div>
+      <figcaption><div class="num">5</div><div>
+        <h3>Mis frases</h3>
+        <p>Lo que resaltas o encierras se guarda solo, con libro, página y fecha. Tocas una frase y te lleva a su página. «Repasar» te muestra frases al azar para hacer memoria.</p>
+      </div></figcaption>
+    </figure>
+
+    <!-- 6 · Materiales -->
+    <figure class="celda">
+      <div class="lamina paper p-crema">
+        <h3 class="lam-t">Materiales</h3>
+        <p class="lam-d">La paleta de la app: papel, tinta, marcadores, lápiz, tacto y sonido.</p>
+        <div class="lam-sec">Papeles</div>
+        <div class="papeles">
+          <div class="pap"><div class="sw paper p-blanco">Aa</div><b>Blanco</b><small>limpio, casi sin grano</small></div>
+          <div class="pap"><div class="sw paper p-crema">Aa</div><b>Crema</b><small>el de siempre</small></div>
+          <div class="pap"><div class="sw paper p-antiguo">Aa</div><b>Antiguo</b><small>amarillento, bordes tostados</small></div>
+          <div class="pap"><div class="sw paper p-noche">Aa</div><b>Noche</b><small>para leer a oscuras</small></div>
+        </div>
+        <div class="lam-sec">Resaltadores</div>
+        <div class="marcadores">
+          <div class="marc"><span class="trazo" style="--c:var(--amarillo)"></span><small>Amarillo</small></div>
+          <div class="marc"><span class="trazo" style="--c:var(--verde)"></span><small>Verde</small></div>
+          <div class="marc"><span class="trazo" style="--c:var(--rosa)"></span><small>Rosa</small></div>
+          <div class="marc"><span class="trazo" style="--c:var(--celeste)"></span><small>Celeste</small></div>
+          <div class="marc"><span class="trazo" style="--c:var(--naranja)"></span><small>Naranja</small></div>
+        </div>
+        <div class="lam-sec">Lápiz para encerrar frases</div>
+        <div class="lapices"><span class="lazo-obj" data-lazo="grafito">lápiz grafito</span><span class="lazo-obj" data-lazo="rojo">lápiz rojo</span></div>
+        <div class="lam-sec">Tacto al pasar la hoja</div>
+        <div class="tacto">
+          <div class="riel-t"><div class="z z1"><i data-i="undo-2"></i>regresa</div><div class="z z2">cae y pasa<i data-i="arrow-right"></i></div><div class="mitad"></div><div class="pd"></div></div>
+          <div class="tacto-lbl"><span>empiezas a arrastrar</span><span>mitad</span><span>fin del recorrido</span></div>
+          <p>La hoja va pegada al dedo. Donde la sueltes decide: antes de la mitad regresa, pasada la mitad termina de caer.</p>
+        </div>
+        <div class="lam-sec">Sonido</div>
+        <div class="sonidos">
+          <div class="son"><svg class="onda" data-onda="roce" viewBox="0 0 160 36"></svg><b>Roce</b><small>mientras arrastras; más rápido, más fuerte</small></div>
+          <div class="son"><svg class="onda" data-onda="caida" viewBox="0 0 160 36"></svg><b>Caída</b><small>golpecito suave cuando la hoja se asienta</small></div>
+        </div>
+        <div class="lam-sec">Letras de la app</div>
+        <div class="letras">
+          <div><span class="f-t">Fraunces</span><small>títulos</small></div>
+          <div><span class="f-u">DM Sans</span><small>botones</small></div>
+          <div><span class="f-l">tu PDF</span><small>el libro, tal cual</small></div>
+        </div>
+      </div>
+      <figcaption><div class="num">6</div><div>
+        <h3>Materiales</h3>
+        <p>Todo propio o de licencia libre: texturas generadas, íconos de Lucide y fuentes de Google Fonts. Los sonidos serán grabaciones reales de hojas.</p>
+      </div></figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- =================== HOJA 3: computadora =================== -->
+<section class="hoja-pres h3" id="hoja3">
+  <div class="fila-pc">
+    <div class="pc">
+      <div class="pc-barra"><span class="luces"><i></i><i></i><i></i></span><span class="pc-titulo">Hoja a hoja — Don Quijote de la Mancha</span></div>
+      <div class="pc-cuerpo">
+        <div class="pc-lectura">
+          <div class="pc-top">
+            <span><i data-i="chevron-left"></i>Estante</span>
+            <span class="pc-libro">Don Quijote de la Mancha · Capítulo I</span>
+            <span class="pc-acc"><i data-i="search"></i><i data-i="table-of-contents"></i><i data-i="panel-right"></i></span>
+          </div>
+          <div class="libro">
+            <div class="tapa"></div>
+            <div class="dpage izq paper p-crema pg-pc" id="pc-izq" data-pagina="p12" data-folio="12"></div>
+            <div class="dpage der curl" id="curl-pc">
+              <div class="under paper p-crema pg-pc sin-marcas" data-pagina="p15" data-folio="15"></div>
+              <div class="cur paper p-crema pg-pc" id="pc-der" data-pagina="p13" data-folio="13"></div>
+            </div>
+          </div>
+          <div class="pc-scrub"><span>12–13</span><div class="riel"><b></b></div><span>de 1 056</span></div>
+          <div class="fab" style="left:975px;top:728px"><i data-i="highlighter"></i></div>
+        </div>
+        <aside class="pc-panel">
+          <div class="pp-cab"><h4>Mis frases</h4><span>de este libro · 3</span></div>
+          <article class="tarjeta">
+            <p class="q"><span class="lazo-obj" data-lazo="rojo">De cuyo nombre no quiero acordarme</span></p>
+            <div class="meta"><span>Pág. 12</span><a>Ir<i data-i="arrow-right"></i></a></div>
+          </article>
+          <article class="tarjeta">
+            <p class="q"><span class="lazo-obj" data-lazo="grafito">«La razón de la sinrazón que a mi razón se hace»</span></p>
+            <div class="meta"><span>Pág. 13</span><a>Ir<i data-i="arrow-right"></i></a></div>
+          </article>
+          <article class="tarjeta">
+            <p class="q"><span class="hl" style="--c:var(--amarillo)">Del poco dormir y del mucho leer, se le secó el celebro.</span></p>
+            <div class="meta"><span>Pág. 13</span><a>Ir<i data-i="arrow-right"></i></a></div>
+          </article>
+          <span class="repasar"><i data-i="shuffle"></i>Repasar frases</span>
+        </aside>
+      </div>
+    </div>
+    <div class="pc-cap">
+      <div class="num">7</div>
+      <div><h3>En la computadora: libro abierto</h3>
+        <p>Doble página sobre una mesa en penumbra. Pasas la hoja arrastrando con el mouse desde la esquina, o con las flechas ← → del teclado (con el mismo sonido). Tus frases del libro quedan a un costado y la barra de abajo te lleva a cualquier página.</p></div>
+      <div><h3>Lo mismo en ambos</h3>
+        <p>Es la misma app en el celular y en la PC: tus libros, la página donde vas y tus frases se sincronizan con tu cuenta. En el celular se ve una página a la vez; en la PC, dos.</p></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- ============ Texto de muestra (dominio público: Cervantes, 1605) ============ -->
+<template id="p12">
+<div class="cap"><div class="cap-n">Capítulo primero</div><div class="cap-t">Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha</div><svg width="64" height="8" viewBox="0 0 64 8"><path d="M2 4h24M38 4h24" stroke="currentColor" stroke-width=".8"/><path d="M32 1 35 4 32 7 29 4Z" fill="currentColor"/></svg></div>
+<p class="first"><span class="capital">E</span>n un lugar de la Mancha, <span class="lazo-obj" data-lazo="rojo">de cuyo nombre no quiero acordarme</span>, no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero, adarga antigua, rocín flaco y galgo corredor. Una olla de algo más vaca que carnero, salpicón las más noches, duelos y quebrantos los sábados, lantejas los viernes, algún palomino de añadidura los domingos, consumían las tres partes de su hacienda. El resto della concluían sayo de velarte, calzas de velludo para las fiestas, con sus pantuflos de lo mesmo, y los días de entresemana se honraba con su vellorí de lo más fino.</p>
+<p>Tenía en su casa una ama que pasaba de los cuarenta y una sobrina que no llegaba a los veinte, y un mozo de campo y plaza que así ensillaba el rocín como tomaba la podadera. Frisaba la edad de nuestro hidalgo con los cincuenta años. Era de complexión recia, seco de carnes, enjuto de rostro, gran madrugador y amigo de la caza. Quieren decir que tenía el sobrenombre de Quijada, o Quesada, que en esto hay alguna diferencia en los autores que deste caso escriben, aunque por conjeturas verosímiles se deja entender que se llamaba Quijana. Pero esto importa poco a nuestro cuento: basta que en la narración dél no se salga un punto de la verdad.</p>
+<p>Es, pues, de saber que este sobredicho hidalgo, los ratos que estaba ocioso, que eran los más del año, se daba a leer libros de caballerías con tanta afición y gusto, que olvidó casi de todo punto el ejercicio de la caza y aun la administración de su hacienda;</p>
+</template>
+<template id="p13">
+<p class="cont">y llegó a tanto su curiosidad y desatino en esto, que vendió muchas hanegas de tierra de sembradura para comprar libros de caballerías en que leer, y así, llevó a su casa todos cuantos pudo haber dellos; y de todos, ningunos le parecían tan bien como los que compuso el famoso Feliciano de Silva, porque la claridad de su prosa y aquellas entricadas razones suyas le parecían de perlas, y más cuando llegaba a leer aquellos requiebros y cartas de desafíos, donde en muchas partes hallaba escrito: <span class="lazo-obj" data-lazo="grafito">«La razón de la sinrazón que a mi razón se hace</span>, de tal manera mi razón enflaquece, que con razón me quejo de la vuestra fermosura».</p>
+<p>Y también cuando leía: «Los altos cielos que de vuestra divinidad divinamente con las estrellas os fortifican, y os hacen merecedora del merecimiento que merece la vuestra grandeza».</p>
+<p>Con estas razones perdía el pobre caballero el juicio, y desvelábase por entenderlas y desentrañarles el sentido, que no se lo sacara ni las entendiera el mesmo Aristóteles, si resucitara para solo ello.</p>
+<p>En resolución, él se enfrascó tanto en su lectura, que se le pasaban las noches leyendo de claro en claro, y los días de turbio en turbio; y así, <span class="hl" id="hl-nuevo" style="--c:var(--amarillo)">del poco dormir y del mucho leer, se le secó el celebro</span>, de manera que vino a perder el juicio. Llenósele la fantasía de todo aquello que leía en los libros, así de encantamentos como de pendencias, batallas, desafíos, heridas, requiebros, amores, tormentas y disparates imposibles;</p>
+</template>
+<template id="p15">
+<p class="cont">y asentósele de tal modo en la imaginación que era verdad toda aquella máquina de aquellas soñadas invenciones que leía, que para él no había otra historia más cierta en el mundo. Decía él que el Cid Ruy Díaz había sido muy buen caballero, pero que no tenía que ver con el Caballero de la Ardiente Espada, que de solo un revés había partido por medio dos fieros y descomunales gigantes. Mejor estaba con Bernardo del Carpio, porque en Roncesvalles había muerto a Roldán el encantado, valiéndose de la industria de Hércules, cuando ahogó a Anteo, el hijo de la Tierra, entre los brazos.</p>
+<p>Decía mucho bien del gigante Morgante, porque, con ser de aquella generación gigantea, que todos son soberbios y descomedidos, él solo era afable y bien criado. Pero, sobre todos, estaba bien con Reinaldos de Montalbán, y más cuando le veía salir de su castillo y robar cuantos topaba.</p>
+<p>En efeto, rematado ya su juicio, vino a dar en el más estraño pensamiento que jamás dio loco en el mundo, y fue que le pareció convenible y necesario, así para el aumento de su honra como para el servicio de su república, hacerse caballero andante y irse por todo el mundo con sus armas y caballo a buscar las aventuras.</p>
+</template>
+
+<script>
+(async function () {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const NS = 'http://www.w3.org/2000/svg';
+
+  // ---------- texturas de papel (ruido generado, sin imágenes externas) ----------
+  const svgUrl = s => `url("data:image/svg+xml,${encodeURIComponent(s)}")`;
+  const ruido = (tam, freq, oct, [r, g, b], a, sesgo, semilla = 1) => svgUrl(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${tam}' height='${tam}'><filter id='n' x='0' y='0' width='100%' height='100%'>` +
+    `<feTurbulence type='fractalNoise' baseFrequency='${freq}' numOctaves='${oct}' seed='${semilla}' stitchTiles='stitch'/>` +
+    `<feColorMatrix values='0 0 0 0 ${r} 0 0 0 0 ${g} 0 0 0 0 ${b} ${a} 0 0 0 ${sesgo}'/></filter>` +
+    `<rect width='100%' height='100%' filter='url(#n)'/></svg>`);
+  const raiz = document.documentElement.style;
+  raiz.setProperty('--grano', ruido(220, .9, 2, [.30, .23, .15], .42, -.17));
+  raiz.setProperty('--grano-claro', ruido(220, .9, 2, [.85, .8, .7], .3, -.12));
+  raiz.setProperty('--mancha', ruido(700, '.005 .011', 4, [.52, .37, .18], .5, -.2, 7));
+  raiz.setProperty('--fibra', ruido(420, '.035 .55', 2, [.40, .31, .2], .28, -.11, 3));
+
+  // ---------- íconos ----------
+  ICONOS.encerrar = '<path d="M6.2 18.6C3.7 17.4 2 15.2 2 12.6 2 8.6 6.5 5.5 12 5.5s10 3.1 10 7.1-4.5 7.1-10 7.1c-1.4 0-2.8-.2-4-.6"/><path d="M7.5 11h9"/><path d="M7.5 14.4h5.5"/>';
+  $$('i[data-i]').forEach(i => {
+    const s = document.createElementNS(NS, 'svg');
+    s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor');
+    s.setAttribute('stroke-width', i.dataset.w || '1.9'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round');
+    s.setAttribute('class', ('ico ' + (i.className || '')).trim());
+    if (i.getAttribute('style')) s.setAttribute('style', i.getAttribute('style'));
+    s.innerHTML = ICONOS[i.dataset.i] || '';
+    i.replaceWith(s);
+  });
+
+  // ---------- barra de estado, isla y barra de inicio ----------
+  const iconosEstado = `<svg width="72" height="14" viewBox="0 0 72 14"><g fill="currentColor"><rect x="0" y="9" width="3" height="4" rx="1"/><rect x="5" y="6.5" width="3" height="6.5" rx="1"/><rect x="10" y="4" width="3" height="9" rx="1"/><rect x="15" y="1.5" width="3" height="11.5" rx="1"/></g><path d="M27 5.2a9 9 0 0 1 12 0M29.3 7.8a5.6 5.6 0 0 1 7.4 0" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/><circle cx="33" cy="10.6" r="1.4" fill="currentColor"/><rect x="45" y="1.5" width="22" height="11" rx="3.2" fill="none" stroke="currentColor" stroke-opacity=".45"/><rect x="47" y="3.5" width="15" height="7" rx="1.6" fill="currentColor"/><rect x="68.3" y="5" width="1.8" height="4" rx=".9" fill="currentColor" fill-opacity=".45"/></svg>`;
+  $$('.pantalla').forEach(p => {
+    p.insertAdjacentHTML('beforeend', `<div class="isla"></div><div class="estado ${p.dataset.estado || ''}"><span>22:14</span>${iconosEstado}</div><div class="home"></div>`);
+  });
+
+  // ---------- páginas del libro ----------
+  $$('[data-pagina]').forEach(el => {
+    el.innerHTML = `<div class="rh">Don Quijote de la Mancha</div><div class="bk caja">${$('#' + el.dataset.pagina).innerHTML}</div><div class="folio">${el.dataset.folio}</div>`;
+  });
+
+  await Promise.all(['400 16px "EB Garamond"', 'italic 400 16px "EB Garamond"', '500 16px "EB Garamond"', '600 16px Fraunces', 'italic 400 16px Fraunces',
+    '400 16px "DM Sans"', '500 16px "DM Sans"', '600 16px "DM Sans"', '700 40px Caveat'].map(f => document.fonts.load(f)));
+  await document.fonts.ready;
+
+  // ---------- lápiz: encerrar frases con un trazo a mano ----------
+  function azar(sem) { return () => { sem |= 0; sem = sem + 0x6D2B79F5 | 0; let t = Math.imul(sem ^ sem >>> 15, 1 | sem); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const COLOR_LAPIZ = { grafito: '#4d453d', rojo: '#b3362b' };
+  let semilla = 11;
+  function encerrar(obj) {
+    const lienzo = obj.closest('.pg, .pg-pc, .tarjeta, .lapices');
+    if (!lienzo || obj.closest('.sin-marcas')) return;
+    const cr = lienzo.getBoundingClientRect();
+    // renglones que ocupa la frase
+    const lineas = [];
+    [...obj.getClientRects()].forEach(r => {
+      const l = { l: r.left - cr.left, r: r.right - cr.left, t: r.top - cr.top, b: r.bottom - cr.top };
+      const ya = lineas.find(x => Math.abs(x.t - l.t) < 4);
+      if (ya) { ya.l = Math.min(ya.l, l.l); ya.r = Math.max(ya.r, l.r); ya.b = Math.max(ya.b, l.b); } else lineas.push(l);
+    });
+    lineas.sort((p, q) => p.t - q.t);
+    const rnd = azar(semilla += 7), f1 = rnd() * 6, f2 = rnd() * 6;
+    const x0 = Math.min(...lineas.map(l => l.l)), x1 = Math.max(...lineas.map(l => l.r));
+    const y0 = lineas[0].t, y1 = lineas[lineas.length - 1].b, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    let base;
+    if (lineas.length === 1) {
+      // un renglón: óvalo
+      const rx = (x1 - x0) / 2 + 9, ry = (y1 - y0) / 2 + 6;
+      base = []; for (let i = 0; i < 90; i++) { const th = Math.PI * .8 + i / 90 * Math.PI * 2; base.push([cx + rx * Math.cos(th), cy + ry * Math.sin(th)]); }
+    } else {
+      // varios renglones: contorno de la frase, suavizado
+      const pad = 5, mid = i => (lineas[i].b + lineas[i + 1].t) / 2, P = [];
+      lineas.forEach((l, i) => { P.push([l.r + pad, i ? mid(i - 1) : l.t - pad]); P.push([l.r + pad, i < lineas.length - 1 ? mid(i) : l.b + pad]); });
+      for (let i = lineas.length - 1; i >= 0; i--) { const l = lineas[i]; P.push([l.l - pad, i < lineas.length - 1 ? mid(i) : l.b + pad]); P.push([l.l - pad, i ? mid(i - 1) : l.t - pad]); }
+      base = P;
+      for (let k = 0; k < 4; k++) { const q = []; base.forEach((p, i) => { const n = base[(i + 1) % base.length]; q.push([p[0] * .75 + n[0] * .25, p[1] * .75 + n[1] * .25], [p[0] * .25 + n[0] * .75, p[1] * .25 + n[1] * .75]); }); base = q; }
+      // empezar abajo a la izquierda, como se suele cerrar a mano
+      let k0 = 0, mejor = -1e9; base.forEach((p, i) => { const v = p[1] - p[0] * .6; if (v > mejor) { mejor = v; k0 = i; } });
+      base = base.slice(k0).concat(base.slice(0, k0));
+    }
+    // una vuelta completa y un poco más, con temblor de mano y la punta que se pasa
+    const N = base.length, extra = Math.round(N * .12), pts = [];
+    for (let i = 0; i <= N + extra; i++) {
+      const p = base[i % N], t = i / (N + extra), th = Math.atan2(p[1] - cy, p[0] - cx);
+      const w = 1 + .03 * Math.sin(th * 2 + f1) + .018 * Math.sin(th * 3 + f2) + .07 * t;
+      pts.push([cx + (p[0] - cx) * (w + .01), cy + (p[1] - cy) * (w + .12 * t) - 1.2 * t]);
+    }
+    const d = 'M' + pts.map(p => p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' L');
+    const col = COLOR_LAPIZ[obj.dataset.lazo] || COLOR_LAPIZ.grafito;
+    const s = document.createElementNS(NS, 'svg');
+    s.setAttribute('style', 'position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:3');
+    const id = 'lp' + semilla;
+    s.innerHTML = `<filter id="${id}"><feTurbulence baseFrequency=".9" numOctaves="1" seed="${semilla}" result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="1.3"/></filter>` +
+      `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" opacity=".82" filter="url(#${id})"/>` +
+      `<path d="${d}" fill="none" stroke="${col}" stroke-width=".8" stroke-linecap="round" opacity=".35" transform="translate(.8 .7)"/>`;
+    lienzo.appendChild(s);
+    return { x0: x0 - 8, x1: x1 + 8, y0: y0 - 6, y1: y1 + 6 };
+  }
+  const cajasLazo = new Map();
+  $$('[data-lazo]').forEach(o => { const c = encerrar(o); if (c) cajasLazo.set(o, c); });
+
+  // aviso «guardada» y toque del dedo en la pantalla 3
+  const pm = $('#pg-menu');
+  const lazoMenu = $('#pg-menu [data-lazo]');
+  if (lazoMenu && cajasLazo.get(lazoMenu)) {
+    const c = cajasLazo.get(lazoMenu);
+    pm.parentElement.insertAdjacentHTML('beforeend', `<div class="aviso" style="left:${Math.min(c.x1 - 70, 228)}px;top:${c.y0 - 26}px">${'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' + ICONOS.check + '</svg>'}Guardada en Mis frases</div>`);
+  }
+  const hl = $('#pg-menu .hl');
+  if (hl) {
+    const rs = [...hl.getClientRects()], ult = rs[rs.length - 1], cr = pm.getBoundingClientRect();
+    pm.parentElement.insertAdjacentHTML('beforeend', `<div class="toque" style="left:${ult.right - cr.left + 1}px;top:${ult.top - cr.top + ult.height / 2}px"></div>`);
+  }
+
+  // ---------- menú circular ----------
+  $$('.radial').forEach(r => {
+    const ax = +r.dataset.ax, ay = +r.dataset.ay, R = +r.dataset.r;
+    const f = $('.r-fondo', r), rf = R + 34;
+    Object.assign(f.style, { left: ax - rf + 'px', top: ay - rf + 'px', width: rf * 2 + 'px', height: rf * 2 + 'px' });
+    $$('.r-item', r).forEach(it => {
+      const a = +it.dataset.ang * Math.PI / 180;
+      it.style.left = ax + R * Math.cos(a) + 'px'; it.style.top = ay + R * Math.sin(a) + 'px';
+    });
+    Object.assign($('.r-ancla', r).style, { left: ax + 'px', top: ay + 'px' });
+    const col = $('.r-colores', r);
+    col.style.left = '14px'; col.style.top = (ay - 30) + 'px';
+  });
+
+  // ---------- la hoja que se curva ----------
+  // Pliegue = recta por a y b. La parte levantada se refleja sobre el pliegue y se
+  // comprime (k < 1) para sugerir la curvatura del papel.
+  function mitad(poli, a, n, pos) {
+    const s = p => ((p[0] - a[0]) * n[0] + (p[1] - a[1]) * n[1]) * (pos ? 1 : -1), out = [];
+    for (let i = 0; i < poli.length; i++) {
+      const P = poli[i], Q = poli[(i + 1) % poli.length], sp = s(P), sq = s(Q);
+      if (sp >= 0) out.push(P);
+      if ((sp >= 0) !== (sq >= 0)) { const t = sp / (sp - sq); out.push([P[0] + (Q[0] - P[0]) * t, P[1] + (Q[1] - P[1]) * t]); }
+    }
+    return out;
+  }
+  function franja(a, n, lado, largo, grad) {
+    const d = document.createElement('div'), ang = Math.atan2(n[1] * lado, n[0] * lado) * 180 / Math.PI;
+    d.style.cssText = `position:absolute;left:${a[0]}px;top:${a[1] - 3000}px;width:${largo}px;height:6000px;transform-origin:0 3000px;transform:rotate(${ang}deg);background:linear-gradient(90deg,${grad});pointer-events:none;z-index:4`;
+    return d;
+  }
+  function curvar(raizCurl, { a, b, k, hacia, dedo, cursor, sombra }) {
+    const W = raizCurl.clientWidth, H = raizCurl.clientHeight;
+    const under = $('.under', raizCurl), cur = $('.cur', raizCurl);
+    let dx = b[0] - a[0], dy = b[1] - a[1]; const L = Math.hypot(dx, dy); dx /= L; dy /= L;
+    let n = [dy, -dx];
+    if ((hacia[0] - a[0]) * n[0] + (hacia[1] - a[1]) * n[1] < 0) n = [-n[0], -n[1]];
+    const rect = [[0, 0], [W, 0], [W, H], [0, H]];
+    const alzada = mitad(rect, a, n, true), queda = mitad(rect, a, n, false);
+    const poli = pts => 'polygon(' + pts.map(p => p[0].toFixed(2) + 'px ' + p[1].toFixed(2) + 'px').join(',') + ')';
+
+    const solapa = cur.cloneNode(true);
+    solapa.removeAttribute('id'); solapa.classList.remove('cur'); solapa.classList.add('solapa');
+    solapa.style.width = W + 'px'; solapa.style.height = H + 'px'; solapa.style.inset = 'auto';
+    solapa.insertAdjacentHTML('beforeend', '<div class="velo-solapa"></div>');
+
+    cur.style.clipPath = poli(queda);
+    cur.appendChild(franja(a, n, -1, 70, 'rgba(70,45,20,.20) 0,rgba(70,45,20,.07) 10px,transparent 44px'));
+    under.appendChild(franja(a, n, 1, 140, 'rgba(45,28,10,.46) 0,rgba(45,28,10,.20) 16px,rgba(45,28,10,.07) 46px,transparent 100px'));
+
+    const c = 1 + k, d0 = a[0] * n[0] + a[1] * n[1];
+    const m11 = 1 - c * n[0] * n[0], m12 = -c * n[0] * n[1], m22 = 1 - c * n[1] * n[1], e = c * d0 * n[0], f = c * d0 * n[1];
+    solapa.style.transform = `matrix(${m11},${m12},${m12},${m22},${e},${f})`;
+    solapa.style.clipPath = poli(alzada);
+    solapa.appendChild(franja(a, n, 1, 260, 'rgba(70,48,25,.42) 0,rgba(70,48,25,.10) 6px,rgba(255,252,244,.70) 16px,rgba(255,252,244,.30) 46px,rgba(70,48,25,.02) 105px,rgba(70,48,25,.13) 160px,rgba(70,48,25,.26) 230px'));
+    const caja = document.createElement('div');
+    caja.className = 'solapa-caja'; caja.style.filter = sombra;
+    caja.appendChild(solapa); raizCurl.appendChild(caja);
+
+    const mapa = p => [m11 * p[0] + m12 * p[1] + e, m12 * p[0] + m22 * p[1] + f];
+    if (dedo) {
+      const [fx, fy] = mapa(dedo);
+      raizCurl.insertAdjacentHTML('beforeend',
+        `<svg class="rastro" viewBox="0 0 ${W} ${H}"><path d="M${W - 10} ${fy + 26} Q ${(W + fx) / 2 + 10} ${fy + 34} ${fx + 34} ${fy + 6}" fill="none" stroke="rgba(42,37,32,.38)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/>` +
+        `<path d="M${fx + 44} ${fy - 2} l-11 8 l13 3" fill="none" stroke="rgba(42,37,32,.45)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>` +
+        `<div class="dedo" style="left:${fx}px;top:${fy}px"></div>`);
+    }
+    if (cursor) {
+      const [cx, cy] = mapa(cursor);
+      raizCurl.insertAdjacentHTML('beforeend', `<div class="cursor" style="left:${cx}px;top:${cy}px"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICONOS['hand-grab']}</svg></div>`);
+    }
+  }
+  curvar($('#curl-cel'), { a: [338, 0], b: [150, 844], k: .9, hacia: [390, 422], dedo: [386, 575], sombra: 'drop-shadow(-8px 4px 10px rgba(50,30,10,.32))' });
+  curvar($('#curl-pc'), { a: [440, 318], b: [226, 620], k: .93, hacia: [440, 620], cursor: [428, 608], sombra: 'drop-shadow(-5px -4px 9px rgba(30,18,6,.35))' });
+
+  // ---------- ondas de sonido ----------
+  $$('svg[data-onda]').forEach(s => {
+    const rnd = azar(s.dataset.onda === 'roce' ? 5 : 9), N = 52, bw = 160 / N;
+    let h = '';
+    for (let i = 0; i < N; i++) {
+      const t = i / (N - 1);
+      let v;
+      if (s.dataset.onda === 'roce') v = Math.pow(Math.sin(Math.PI * t), .8) * (.35 + .65 * rnd()) * (.55 + .45 * t);
+      else v = t < .14 ? .05 + .06 * rnd() : (t < .18 ? 1 : Math.exp(-(t - .18) * 9) * (.5 + .5 * rnd()) + .03);
+      const alto = Math.max(1.5, v * 32);
+      h += `<rect x="${(i * bw + .4).toFixed(2)}" y="${(18 - alto / 2).toFixed(2)}" width="${(bw - 1.1).toFixed(2)}" height="${alto.toFixed(2)}" rx="1" fill="currentColor" opacity="${.35 + .6 * v}"/>`;
+    }
+    s.innerHTML = h;
+  });
+
+  window.__listo = true;
+})();
+</script>
+</body>
+</html>
