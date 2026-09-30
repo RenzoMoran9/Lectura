@@ -4,3 +4,5 @@ dist/
 *.local
 .env
 .env.*
+public/pdfjs/
+test-results/
