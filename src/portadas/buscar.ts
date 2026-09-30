@@ -37,6 +37,11 @@ export function limpiarTitulo(t: string): string {
 
 const proporcion = (a: string[], b: string[]) => (a.length ? a.filter((x) => b.includes(x)).length / a.length : 0);
 
+// Libros sobre el libro (guías, resúmenes…): comparten el título, pero no son él.
+const SOBRE_EL_LIBRO = new Set(
+  'guia guias resumen resumenes analisis comentario comentarios estudio notas lectura critica ejercicios summary study guide notes workbook analysis sparknotes cliffsnotes'.split(' '),
+);
+
 /** ¿Es esta portada, con seguridad, la del libro? */
 export function coincide(c: Pick<Candidata, 'titulo' | 'autor'>, titulo: string, autor: string): boolean {
   const qt = palabras(titulo);
@@ -44,6 +49,7 @@ export function coincide(c: Pick<Candidata, 'titulo' | 'autor'>, titulo: string,
   const ct = palabras(c.titulo);
   const ca = palabras(c.autor);
   if (!qt.length || !ct.length) return false;
+  if (ct.some((p) => SOBRE_EL_LIBRO.has(p) && !qt.includes(p))) return false;
   if (qa.length) {
     const tituloOk = proporcion(qt, ct) >= 0.7 && proporcion(ct, qt) >= 0.5;
     const autorOk = qa.some((p) => p.length > 2 && ca.includes(p));
@@ -124,6 +130,30 @@ export async function descargarPortada(url: string, senal?: AbortSignal): Promis
     const b = await r.blob();
     // Menos de 2 KB suele ser una imagen vacía de «sin portada».
     return b.type.startsWith('image/') && b.size > 2000 ? b : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Las portadas de internet que coinciden con seguridad con el libro. Falla si no hay conexión. */
+export async function portadasSeguras(titulo: string, autor: string, senal?: AbortSignal): Promise<Candidata[]> {
+  const limpio = limpiarTitulo(titulo);
+  return (await buscarPortadas(titulo, autor, senal)).filter((c) => coincide(c, limpio, autor));
+}
+
+export const CACHE_PORTADAS = 'entre-hojas-portadas';
+
+/**
+ * Trae la portada elegida para que se vea también sin internet. Si el sitio deja leerla, se guarda
+ * la imagen junto al libro; si no, queda en la caché del navegador y se muestra desde su dirección.
+ */
+export async function traerPortada(url: string, senal?: AbortSignal): Promise<{ blob?: Blob; url: string } | null> {
+  const blob = await descargarPortada(url, senal);
+  if (blob) return { blob, url };
+  try {
+    const r = await fetch(url, { mode: 'no-cors', signal: senal });
+    if (typeof caches !== 'undefined') await (await caches.open(CACHE_PORTADAS)).put(url, r);
+    return { url };
   } catch {
     return null;
   }

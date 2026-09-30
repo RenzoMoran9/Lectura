@@ -1,56 +1,87 @@
-// Pantalla de inicio (Etapa 1): seguir leyendo, los libros guardados y «Subir PDF».
-// El estante completo, con pestañas y «Para recordar hoy», llega en la Etapa 3.
+// Estante (propuesta visual, pantalla 1): «Seguir leyendo», «Para recordar hoy», los libros con su
+// portada y su avance, «Subir PDF» y las pestañas «Estante» y «Mis frases».
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { Libro } from '../datos/bd';
+import { useAjustes } from '../estado/ajustes';
+import { useFrases } from '../estado/frases';
 import { useLibros } from '../estado/libros';
+import { azar } from '../frases/dibujo';
+import { usePwa } from '../pwa/pwa';
 import { sonido } from '../sonido/sonido';
+import { FichaLibro } from './FichaLibro';
+import { miles, tamanoLegible } from './formato';
 import { Icono } from './Icono';
+import { TextoFrase } from './MisFrases';
+import { Pestanas } from './Pestanas';
+import { Portada } from './Portada';
 
 const saludo = () => {
   const h = new Date().getHours();
   return h < 6 ? 'Buenas noches' : h < 13 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
 };
 
-export const tamanoLegible = (bytes: number) =>
-  bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1).replace('.', ',')} GB` : bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`;
+const sinAcentos = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
-const miles = (n: number) => n.toLocaleString('es');
+/** Cada día toca una frase distinta, la misma todo el día. */
+function fraseDelDia<T extends { id: string }>(frases: T[]): T | undefined {
+  if (!frases.length) return undefined;
+  const hoy = new Date().toLocaleDateString('en-CA');
+  const orden = [...frases].sort((a, b) => (a.id < b.id ? -1 : 1));
+  return orden[Math.floor(azar(hoy)() * orden.length)];
+}
 
-function Portada({ libro, grande }: { libro: Libro; grande?: boolean }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!libro.portada) return;
-    const u = URL.createObjectURL(libro.portada);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [libro.portada]);
+function InstalarAviso() {
+  const { evento, instalada, ios, instalar } = usePwa();
+  const { sinAvisoInstalar, poner } = useAjustes();
+  if (instalada || sinAvisoInstalar || (!evento && !ios)) return null;
   return (
-    <div className={`portada ${grande ? 'grande' : ''}`}>
-      {url ? <img src={url} alt="" draggable={false} /> : <span className="portada-t">{libro.titulo}</span>}
+    <div className="aviso-instalar">
+      <Icono nombre="download" tam={18} />
+      {evento ? (
+        <>
+          <span>Instálala en tu pantalla de inicio: se abre a pantalla completa y funciona sin internet.</span>
+          <button className="btn-tinta" onClick={instalar}>
+            Instalar
+          </button>
+        </>
+      ) : (
+        <span>
+          Para instalarla, toca <b>Compartir</b> <span className="ios-compartir" aria-hidden="true">⎋</span> y luego <b>Agregar a inicio</b>.
+        </span>
+      )}
+      <button className="cerrar-aviso" onClick={() => poner({ sinAvisoInstalar: true })} aria-label="No volver a mostrar">
+        <Icono nombre="x" tam={16} />
+      </button>
     </div>
   );
 }
 
 export function Inicio() {
-  const { libros, avances, subida, error, subir, abrir: abrirLibro, quitar, limpiarError, cargado } = useLibros();
+  const { libros, avances, subida, error, subir, abrir: abrirLibro, limpiarError, cargado } = useLibros();
+  const frases = useFrases((s) => s.frases);
   // Abrir un libro es un toque del usuario: se aprovecha para encender el audio de las hojas.
-  const abrir = (id: string) => {
+  const abrir = (id: string, pagina?: number) => {
     sonido.despertar();
-    abrirLibro(id);
+    abrirLibro(id, pagina);
   };
   const entrada = useRef<HTMLInputElement>(null);
-  const [quitando, setQuitando] = useState(false);
+  const [ficha, setFicha] = useState<string | null>(null);
+  const [buscando, setBuscando] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
   const [cargandoMuestra, setCargandoMuestra] = useState(false);
 
   const ordenados = useMemo(
-    () =>
-      [...libros].sort(
-        (a, b) => (avances[b.id]?.actualizado ?? b.agregado) - (avances[a.id]?.actualizado ?? a.agregado),
-      ),
+    () => [...libros].sort((a, b) => (avances[b.id]?.actualizado ?? b.agregado) - (avances[a.id]?.actualizado ?? a.agregado)),
     [libros, avances],
   );
-  const ultimo = ordenados[0];
+  // «Seguir leyendo» es el último libro que se abrió (no uno recién subido sin leer).
+  const ultimo = ordenados.find((l) => avances[l.id]) ?? ordenados[0];
+  const q = sinAcentos(busqueda.trim());
+  const visibles = q ? ordenados.filter((l) => sinAcentos(`${l.titulo} ${l.autor}`).includes(q)) : ordenados;
+
+  const delDia = useMemo(() => fraseDelDia(frases.filter((f) => f.texto || f.imagen)), [frases]);
+  const libroDelDia = delDia && libros.find((l) => l.id === delDia.libroId);
 
   const elegir = () => entrada.current?.click();
   const alElegir = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,20 +101,47 @@ export function Inicio() {
     }
   };
 
-  const pedirQuitar = (libro: Libro) => {
-    if (confirm(`¿Quitar «${libro.titulo}» de tu estante? Se borra de este dispositivo.`)) void quitar(libro);
-  };
-
   const pct = (l: Libro) => {
     const a = avances[l.id];
     return a && a.total > 1 ? Math.round((a.pagina / (a.total - 1)) * 100) : 0;
   };
+  const estadoLibro = (l: Libro) => {
+    const a = avances[l.id];
+    if (!a) return 'Nuevo';
+    if (a.total > 1 && a.pagina >= a.total - 1) return 'Leído ✓';
+    return `${Math.max(1, pct(l))} %`;
+  };
+  const avanceUltimo = ultimo && avances[ultimo.id];
+  const libroFicha = ficha ? libros.find((l) => l.id === ficha) : undefined;
 
   return (
     <div className="inicio ui">
       <div className="inicio-cont">
         <div className="saludo">{saludo()}</div>
-        <h1 className="titulo-app">Mi estante</h1>
+        <div className="titulo-fila">
+          <h1 className="titulo-app">Mi estante</h1>
+          {libros.length > 0 && (
+            <button
+              className={`icono-btn ${buscando ? 'on' : ''}`}
+              onClick={() => {
+                setBuscando((b) => !b);
+                setBusqueda('');
+              }}
+              aria-label={buscando ? 'Cerrar búsqueda' : 'Buscar en el estante'}
+            >
+              <Icono nombre={buscando ? 'x' : 'search'} tam={19} />
+            </button>
+          )}
+        </div>
+
+        {buscando && (
+          <label className="buscar buscar-estante">
+            <Icono nombre="search" tam={18} />
+            <input type="search" autoFocus placeholder="Buscar por título o autor" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+          </label>
+        )}
+
+        {!buscando && <InstalarAviso />}
 
         {cargado && !ultimo && !subida && (
           <div className="vacio">
@@ -98,23 +156,44 @@ export function Inicio() {
           </div>
         )}
 
-        {ultimo && (
+        {ultimo && !buscando && (
           <div className="seguir papel-crema" role="button" tabIndex={0} onClick={() => abrir(ultimo.id)} onKeyDown={(e) => e.key === 'Enter' && abrir(ultimo.id)}>
             <div className="cinta" aria-hidden="true" />
             <Portada libro={ultimo} grande />
             <div className="seguir-datos">
-              <div className="eti">Seguir leyendo</div>
+              <div className="eti">{avanceUltimo ? 'Seguir leyendo' : 'Empezar a leer'}</div>
               <div className="libro-t">{ultimo.titulo}</div>
               {ultimo.autor && <div className="libro-a">{ultimo.autor}</div>}
               <div className="avance">
                 <span style={{ width: `${Math.max(2, pct(ultimo))}%` }} />
               </div>
               <div className="avance-t">
-                pág. {miles((avances[ultimo.id]?.pagina ?? 0) + 1)} de {miles(ultimo.paginas)}
+                {avanceUltimo?.capitulo && <span className="cap-actual">{avanceUltimo.capitulo} · </span>}
+                pág. {miles((avanceUltimo?.pagina ?? 0) + 1)} de {miles(ultimo.paginas)}
               </div>
               <button className="btn-tinta">
-                Continuar <Icono nombre="arrow-right" tam={16} />
+                {avanceUltimo ? 'Continuar' : 'Abrir'} <Icono nombre="arrow-right" tam={16} />
               </button>
+            </div>
+          </div>
+        )}
+
+        {delDia && !buscando && (
+          <div
+            className="recordar"
+            role="button"
+            tabIndex={0}
+            onClick={() => libroDelDia && abrir(delDia.libroId, delDia.pagina)}
+            onKeyDown={(e) => e.key === 'Enter' && libroDelDia && abrir(delDia.libroId, delDia.pagina)}
+          >
+            <div className="eti">
+              <Icono nombre="sparkles" tam={14} /> Para recordar hoy
+            </div>
+            <p className="frase">
+              <TextoFrase f={delDia} />
+            </p>
+            <div className="meta">
+              {[libroDelDia?.titulo ?? delDia.libroTitulo, libroDelDia?.autor, `pág. ${delDia.pagina + 1}`].filter(Boolean).join(' · ')}
             </div>
           </div>
         )}
@@ -122,30 +201,34 @@ export function Inicio() {
         {ordenados.length > 0 && (
           <>
             <div className="titulo-sec">
-              <b>Mis libros</b>
-              <button className="enlace-chico" onClick={() => setQuitando((q) => !q)}>
-                {quitando ? 'Listo' : 'Quitar'}
-              </button>
+              <b>{q ? 'Resultados' : 'Mis libros'}</b>
+              <span>
+                {visibles.length} {visibles.length === 1 ? 'libro' : 'libros'}
+                {q ? '' : ' · recientes'}
+              </span>
             </div>
+            {visibles.length === 0 && <p className="nada">Ningún libro coincide.</p>}
             <div className="rejilla">
-              {ordenados.map((l) => (
+              {visibles.map((l) => (
                 <div key={l.id} className="libro-celda">
-                  <button className="libro-boton" onClick={() => (quitando ? pedirQuitar(l) : abrir(l.id))} aria-label={`Abrir ${l.titulo}`}>
+                  <button className="libro-boton" onClick={() => abrir(l.id)} aria-label={`Abrir ${l.titulo}`}>
                     <Portada libro={l} />
-                    {quitando && (
-                      <span className="quitar-marca">
-                        <Icono nombre="x" tam={14} grosor={2.4} />
-                      </span>
-                    )}
                   </button>
                   <div className="mini-av">
                     <span style={{ width: `${pct(l)}%` }} />
                   </div>
-                  <div className="lib-t" title={l.titulo}>
-                    {l.titulo}
-                  </div>
-                  <div className="lib-m">
-                    {pct(l)} % · {tamanoLegible(l.tamano)}
+                  <div className="lib-fila">
+                    <div className="lib-textos">
+                      <div className="lib-t" title={l.titulo}>
+                        {l.titulo}
+                      </div>
+                      <div className="lib-m">
+                        {estadoLibro(l)} · {tamanoLegible(l.tamano)}
+                      </div>
+                    </div>
+                    <button className="mas" onClick={() => setFicha(l.id)} aria-label={`Portada y datos de ${l.titulo}`}>
+                      <Icono nombre="more-horizontal" tam={18} grosor={2.4} />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -155,12 +238,16 @@ export function Inicio() {
       </div>
 
       {(ordenados.length > 0 || subida) && (
-        <button className="subir" onClick={elegir} disabled={!!subida}>
+        <button className="subir con-pestanas" onClick={elegir} disabled={!!subida}>
           <Icono nombre="plus" tam={20} grosor={2.2} /> Subir PDF
         </button>
       )}
 
+      <Pestanas actual="inicio" />
+
       <input ref={entrada} type="file" accept="application/pdf,.pdf" hidden onChange={alElegir} />
+
+      {libroFicha && <FichaLibro key={libroFicha.id} libro={libroFicha} alCerrar={() => setFicha(null)} />}
 
       {subida && (
         <div className="velo">

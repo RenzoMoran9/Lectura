@@ -351,3 +351,98 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: 0; bo
 .repasar-botones .btn-tinta { margin: 0; padding: 11px 18px 11px 14px; font-size: 14.5px; background: #FBF3E4; color: var(--tinta); }
 .enlace-ir { display: inline-flex; gap: 4px; align-items: center; font: 600 14px "DM Sans"; color: #F5EDDB; padding: 8px; }
 .repasar-cuenta { font: 500 12px "DM Sans"; color: rgba(245, 237, 219, .7); }
+
+/* ---------- estante (etapa 3) ---------- */
+.icono-btn { width: 42px; height: 42px; border-radius: 50%; background: rgba(60, 40, 20, .07); display: grid; place-items: center; color: var(--tinta); flex: none; margin-top: -8px; }
+.icono-btn.on { background: var(--tinta); color: #F6EFE1; }
+.buscar-estante { margin: 0 0 14px; }
+.cap-actual { font-weight: 600; }
+.recordar {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  margin-top: 14px; padding: 14px 16px 13px; border-radius: 16px; background: rgba(255, 253, 248, .55); border: 1px dashed rgba(60, 40, 20, .22);
+}
+.recordar .eti { display: flex; align-items: center; gap: 6px; }
+.recordar .frase {
+  font: italic 400 19px/1.38 "EB Garamond", Georgia, serif; margin: 8px 0 6px; overflow-wrap: break-word;
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+}
+.recordar .frase:has(.encerrado) { padding: 4px 10px 2px; -webkit-line-clamp: unset; display: block; }
+.recordar .frase .recorte { max-height: 140px; }
+.recordar .meta { font: 500 11.5px "DM Sans"; color: var(--tinta-2); }
+.titulo-sec span { font: 500 12px "DM Sans"; color: var(--tinta-2); }
+.lib-fila { display: flex; align-items: flex-start; gap: 2px; }
+.lib-textos { flex: 1; min-width: 0; }
+.mas { flex: none; width: 30px; height: 30px; margin: 2px -6px 0 0; border-radius: 50%; display: grid; place-items: center; color: var(--tinta-2); }
+.mas:active { background: rgba(60, 40, 20, .08); }
+.subir.con-pestanas { bottom: calc(var(--seguro-abajo) + 82px); right: max(calc(var(--seguro-der) + 18px), calc(50vw - 262px)); }
+.inicio .inicio-cont, .mis-frases .inicio-cont { padding-bottom: calc(var(--seguro-abajo) + 160px); }
+
+.pestanas {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+  height: calc(var(--seguro-abajo) + 64px); padding: 8px 0 var(--seguro-abajo);
+  display: flex; justify-content: center; gap: min(28vw, 140px);
+  background: var(--ui); background-image: var(--grano); border-top: 1px solid rgba(60, 40, 20, .1);
+}
+.pestanas::before { content: ""; position: absolute; left: 0; right: 0; top: -36px; height: 36px; background: linear-gradient(rgba(244, 238, 226, 0), var(--ui)); pointer-events: none; }
+.pestanas button { display: flex; flex-direction: column; align-items: center; gap: 3px; font: 600 11.5px "DM Sans"; color: var(--tinta-3); min-width: 72px; padding: 2px 8px; }
+.pestanas button.on { color: var(--tinta); }
+
+.aviso-instalar {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 14px; padding: 10px 8px 10px 14px; border-radius: 14px;
+  background: rgba(255, 253, 248, .6); border: 1px solid rgba(60, 40, 20, .12); font: 500 13px/1.35 "DM Sans"; color: var(--tinta-2);
+}
+.aviso-instalar > span { flex: 1; }
+.aviso-instalar b { color: var(--tinta); }
+.aviso-instalar .btn-tinta { margin: 0; padding: 8px 14px; flex: none; }
+.aviso-instalar .cerrar-aviso { width: 32px; height: 32px; display: grid; place-items: center; color: var(--tinta-3); flex: none; }
+.ios-compartir { display: inline-block; transform: rotate(-90deg); font-weight: 600; }
+
+.aviso-version {
+  position: fixed; top: calc(var(--seguro-arriba) + 12px); left: 50%; transform: translateX(-50%); z-index: 70;
+  display: flex; align-items: center; gap: 8px; padding: 7px 7px 7px 13px; border-radius: 16px; width: max-content; max-width: calc(100% - 24px);
+  background: var(--tinta); color: #F5EDDB; font: 500 13px "DM Sans"; box-shadow: 0 10px 22px -10px rgba(0, 0, 0, .5); animation: aparecer .2s both;
+}
+.aviso-version button { background: #F5EDDB; color: var(--tinta); font-weight: 600; padding: 6px 11px; border-radius: 11px; }
+
+/* ---------- ficha del libro (portada, título y autor) ---------- */
+.ficha { max-height: calc(100dvh - var(--seguro-arriba) - 24px); overflow-y: auto; overscroll-behavior: contain; }
+.campos { display: grid; gap: 10px; margin-bottom: 18px; }
+.campo { display: grid; gap: 4px; }
+.campo span { font: 600 10.5px "DM Sans"; letter-spacing: .14em; text-transform: uppercase; color: var(--tinta-2); }
+.campo input {
+  height: 44px; border-radius: 12px; border: 1px solid rgba(60, 40, 20, .16); background: rgba(255, 255, 255, .6);
+  padding: 0 12px; font: 500 16px "DM Sans"; color: var(--tinta); outline: none; min-width: 0;
+}
+.campo input:focus { border-color: var(--tinta); }
+.fila-eti { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.fila-eti .enlace-chico { display: inline-flex; align-items: center; gap: 5px; letter-spacing: 0; text-transform: none; }
+.fila-eti .enlace-chico:disabled { opacity: .45; }
+.opciones-portada {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 84px; gap: 12px; overflow-x: auto;
+  margin: 0 -22px; padding: 8px 22px 6px; scroll-padding: 0 22px; scrollbar-width: none; scroll-snap-type: x proximity;
+}
+.opciones-portada::-webkit-scrollbar { display: none; }
+.opcion-portada { display: block; width: 84px; scroll-snap-align: start; text-align: center; }
+.opcion-portada .portada { width: 84px; }
+.opcion-portada .portada img.cargando { opacity: 0; }
+.opcion-portada.on .portada { box-shadow: 0 0 0 2.5px var(--ui-claro), 0 0 0 5px var(--tinta), 0 10px 18px -8px rgba(40, 20, 5, .55); overflow: visible; }
+.opcion-portada.on .portada img { border-radius: 2px 6px 6px 2px; }
+.opcion-portada .ok { position: absolute; top: -8px; right: -8px; z-index: 2; width: 22px; height: 22px; border-radius: 50%; background: var(--tinta); color: #fff; display: grid; place-items: center; }
+.opcion-pie { display: block; margin-top: 7px; font: 500 11px/1.25 "DM Sans"; color: var(--tinta-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opcion-portada.on .opcion-pie { color: var(--tinta); font-weight: 600; }
+.opcion-pie small { display: block; font-size: 10.5px; color: var(--tinta-3); font-weight: 500; }
+.buscar input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.mis-frases .inicio-cont > .titulo-fila:first-child { margin-top: 20px; }
+.portada.esperando { background: linear-gradient(100deg, #E9DFCB 30%, #F3EBDB 50%, #E9DFCB 70%); background-size: 300% 100%; animation: brillo 1.2s linear infinite; }
+@keyframes brillo { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+.tela-vacia { position: absolute; inset: 0; }
+.nota { font: 500 12.5px/1.45 "DM Sans"; color: var(--tinta-2); margin: 10px 0 0; }
+.nota.error { color: var(--cinta); }
+.auto-portadas { margin-top: 16px; font-size: 14px; }
+.auto-portadas span { color: var(--tinta-2); }
+.ficha-pie { display: flex; align-items: center; gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(60, 40, 20, .12); }
+.quitar-libro { display: inline-flex; align-items: center; gap: 6px; font: 600 13px "DM Sans"; color: var(--cinta); padding: 8px 0; }
+.ficha-datos { flex: 1; text-align: right; font: 500 11.5px "DM Sans"; color: var(--tinta-3); }
+.ficha-pie .btn-tinta { margin: 0; padding: 11px 20px; font-size: 14.5px; }
+.ficha-pie .btn-tinta:disabled { opacity: .6; }
+.inicio .titulo-fila .titulo-app { margin-bottom: 14px; }

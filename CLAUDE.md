@@ -83,7 +83,7 @@ Pantallas:
 - **Lápices para encerrar:** grafito `#4D453D` y rojo `#B3362B`. El trazo es a mano, con temblor, se pasa un poco al cerrar y sigue la forma de la frase aunque ocupe varios renglones.
 - **Letras de la app:** Fraunces para los títulos y DM Sans para los botones y menús. El texto del libro es el del PDF, tal cual.
 - **Íconos:** de Lucide (licencia ISC) o propios.
-- **Portadas:** la primera página del PDF.
+- **Portadas:** la original, buscada en internet (Open Library y Google Books) por título y autor; si no aparece, la primera página del PDF. Desde el «⋯» de cada libro se elige otra: la del PDF, otra de internet o una «de tela» hecha por la app.
 - **Recursos:** todo propio o de licencia libre; nada copiado.
 
 ## Decisiones técnicas

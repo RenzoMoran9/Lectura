@@ -15,7 +15,17 @@ export interface Libro {
   paginas: number;
   almacen: Almacen;
   agregado: number;
+  /** La portada que se ve en el estante. */
   portada?: Blob | null;
+  /** Si la portada es una imagen de internet que no se pudo descargar, se muestra desde su dirección. */
+  portadaUrl?: string;
+  /** La primera página del PDF, para poder volver a ella. */
+  portadaPdf?: Blob | null;
+  portadaOrigen?: 'pdf' | 'internet' | 'tela';
+  /** Estilo de la portada de tela (índice en ESTILOS_TELA). */
+  portadaTela?: number;
+  /** Ya se buscó su portada en internet (o la eligió el usuario): no se vuelve a buscar sola. */
+  portadaBuscada?: boolean;
 }
 
 export interface Avance {

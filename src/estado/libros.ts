@@ -5,6 +5,8 @@ import { guardarArchivo, pedirPersistencia, quitarLibro, SinEspacio } from '../d
 import { guardarLibro, listarAvances, listarLibros, obtenerLibro, type Avance, type Libro } from '../datos/bd';
 import { abrirPdf, cerrarPdf, PdfConClave, PdfDanado, tituloDelPdf } from '../pdf/pdf';
 import { dibujarPortada } from '../pdf/paginas';
+import { portadasSeguras, traerPortada } from '../portadas/buscar';
+import { useAjustes } from './ajustes';
 
 export type Vista =
   | { pantalla: 'inicio' }
@@ -28,9 +30,14 @@ interface EstadoLibros {
   cargar: () => Promise<void>;
   abrir: (libroId: string, pagina?: number) => void;
   verFrases: (libroId?: string) => void;
+  /** Pestañas de abajo: «Estante» vuelve al principio; «Mis frases» se abre encima. */
+  pestana: (p: 'inicio' | 'frases') => void;
   volver: () => void;
   subir: (archivo: File) => Promise<void>;
   quitar: (libro: Libro) => Promise<void>;
+  actualizar: (id: string, cambios: Partial<Libro>) => Promise<void>;
+  /** Busca en internet la portada original de los libros que aún no la tienen buscada. */
+  completarPortadas: () => Promise<void>;
   anotarAvance: (avance: Avance) => void;
   limpiarError: () => void;
 }
@@ -57,6 +64,7 @@ function ir(vista: Vista) {
 }
 
 let vez = 0;
+let buscandoPortadas = false;
 
 export const useLibros = create<EstadoLibros>()((set, get) => ({
   // Al recargar la página se vuelve a la pantalla en la que estabas.
@@ -75,6 +83,14 @@ export const useLibros = create<EstadoLibros>()((set, get) => ({
   abrir: (libroId, pagina) =>
     ir({ pantalla: 'lector', libroId, pagina, vez: ++vez, desde: get().vista.pantalla === 'frases' ? 'frases' : 'inicio' }),
   verFrases: (libroId) => ir({ pantalla: 'frases', libroId }),
+  pestana: (p) => {
+    const actual = get().vista.pantalla;
+    if (p === actual) return;
+    const prof = entradaActual()?.prof ?? 0;
+    if (p === 'frases') ir({ pantalla: 'frases' });
+    else if (prof > 0) history.go(-prof);
+    else set({ vista: { pantalla: 'inicio' } });
+  },
   volver: () => {
     if ((entradaActual()?.prof ?? 0) > 0) history.back();
     else set({ vista: { pantalla: 'inicio' } });
@@ -126,6 +142,8 @@ export const useLibros = create<EstadoLibros>()((set, get) => ({
       set({ subida: null });
       await get().cargar();
       get().abrir(id);
+      // Mientras lees, se busca su portada original en internet.
+      void get().completarPortadas();
     } catch (e) {
       console.error(e);
       let error = 'No se pudo abrir este PDF.';
@@ -139,5 +157,44 @@ export const useLibros = create<EstadoLibros>()((set, get) => ({
   quitar: async (libro) => {
     await quitarLibro(libro.id, libro.almacen);
     await get().cargar();
+  },
+
+  actualizar: async (id, cambios) => {
+    const actual = await obtenerLibro(id);
+    if (!actual) return;
+    const libro = { ...actual, ...cambios };
+    await guardarLibro(libro);
+    set((s) => ({ libros: s.libros.map((l) => (l.id === id ? libro : l)) }));
+  },
+
+  completarPortadas: async () => {
+    if (buscandoPortadas || !useAjustes.getState().portadasEnLinea || !navigator.onLine) return;
+    buscandoPortadas = true;
+    try {
+      for (const { id } of get().libros.filter((l) => !l.portadaBuscada)) {
+        const l = await obtenerLibro(id);
+        if (!l || l.portadaBuscada) continue;
+        let candidatas;
+        try {
+          candidatas = await portadasSeguras(l.titulo, l.autor);
+        } catch {
+          return; // sin conexión: se vuelve a intentar la próxima vez
+        }
+        let elegida: { blob?: Blob; url: string } | null = null;
+        for (const c of candidatas.slice(0, 3)) if ((elegida = await traerPortada(c.url))) break;
+        const cambios: Partial<Libro> = { portadaBuscada: true };
+        // Solo cambia sola la del PDF: si el usuario eligió otra, se respeta.
+        if (elegida && (l.portadaOrigen ?? 'pdf') === 'pdf')
+          Object.assign(cambios, {
+            portadaPdf: l.portadaPdf ?? l.portada ?? null,
+            portada: elegida.blob ?? null,
+            portadaUrl: elegida.url,
+            portadaOrigen: 'internet',
+          } satisfies Partial<Libro>);
+        await get().actualizar(id, cambios);
+      }
+    } finally {
+      buscandoPortadas = false;
+    }
   },
 }));

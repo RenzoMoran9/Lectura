@@ -4,7 +4,7 @@
 export const ESTILOS_TELA = [
   { nombre: 'Granate', fondo: '#7B2530', tinta: '#E2C27A' },
   { nombre: 'Verde', fondo: '#2E4A3B', tinta: '#EFE6CF' },
-  { nombre: 'Negro', fondo: '#1E1C1A', tinta: '#EDE6D6' },
+  { nombre: 'Negra', fondo: '#1E1C1A', tinta: '#EDE6D6' },
   { nombre: 'Azul', fondo: '#233650', tinta: '#E9E1CC' },
 ] as const;
 

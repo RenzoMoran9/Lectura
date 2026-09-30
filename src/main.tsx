@@ -3,10 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { useAjustes } from './estado/ajustes';
 import { instalarTexturasCss } from './hoja/papel';
+import { iniciarPwa } from './pwa/pwa';
 import { sonido } from './sonido/sonido';
 import './estilos.css';
 
 instalarTexturasCss();
+iniciarPwa();
 
 // El motor de sonido sigue a los ajustes guardados.
 const aplicarSonido = () => {

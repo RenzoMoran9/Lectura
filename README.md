@@ -13,7 +13,7 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
 | 0 | Propuesta visual (maqueta e imágenes) | ✅ hecha |
 | 1 | Subir PDF, pasar la hoja con el dedo (curva + sonido), 4 papeles, recordar la página | ✅ hecha |
 | 2 | Menú de la esquina: resaltador, lápiz para encerrar, borrador y «Mis frases» | ✅ hecha |
-| 3 | Estante con varios libros, doble página en la PC, instalar en el celular, sin internet | ⏳ |
+| 3 | Estante con varios libros, portadas de internet, zoom, doble página en la PC, instalar en el celular, sin internet | ✅ hecha |
 | 4 | Inicio de sesión y sincronización entre celular y PC (Supabase) | ⏳ |
 
 **La app:** https://renzomoran9.github.io/Lectura/
@@ -47,6 +47,26 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   con la hoja, se ven en su reverso y funcionan en los 4 papeles (en «noche» se invierten con la página).
 - **Borrador** con «Deshacer». **Mis frases** (IndexedDB): texto, libro, página, fecha y color; buscador, filtros por
   libro y color, «Ir a la página» y «Repasar» (frases al azar). Si quitas un libro, sus frases se conservan.
+
+## Etapa 3: cómo funciona
+
+- **Estante** (`src/ui/Inicio.tsx`): «Seguir leyendo» con el capítulo (del índice del PDF) y la página, «Para recordar
+  hoy» (una frase guardada distinta cada día; al tocarla te lleva a su página), los libros con portada y avance
+  («Nuevo», «23 %», «Leído ✓»), buscador y pestañas «Estante» y «Mis frases».
+- **Portadas originales** (`src/portadas/`): al subir un libro se busca su portada en Open Library y Google Books por
+  título y autor. Solo se pone sola si coincide con seguridad; se descarga y se guarda en el dispositivo (o, si el sitio
+  no deja leerla, en la caché del navegador), así se ve sin internet. En el «⋯» de cada libro se corrigen el título y el
+  autor, se vuelve a buscar y se elige: la primera página del PDF, otra de internet o una «de tela» hecha por la app.
+  Para buscarlas se envían a esos catálogos solo el título y el autor del libro; se puede apagar en la misma ficha.
+- **Zoom** (`src/hoja/gestos.ts`, `src/hoja/zoom.ts`): pellizco con dos dedos, un dedo mueve la hoja ampliada, doble
+  toque acerca o vuelve al tamaño normal. En la PC, Ctrl + rueda (hacia el puntero), la rueda sola mueve, y Ctrl + / − / 0.
+  Al quedarse quieto, la parte visible se vuelve a dibujar nítida a la nueva escala.
+- **Doble página** en la PC o la tablet en horizontal: el libro abierto sobre la mesa; se toma la esquina con el mouse
+  (o ← →); el reverso de la hoja es la página siguiente de verdad. Barra de arriba con título y capítulo, barra de abajo
+  para saltar de página y panel lateral con las frases del libro.
+- **Instalable y sin internet** (`src/pwa/`, `scripts/pwa.mjs`): manifiesto con íconos propios
+  (`node scripts/generar-iconos.cjs`) y un service worker que guarda toda la app al abrirla la primera vez. Cuando
+  se publica una versión nueva aparece «Hay una versión nueva · Actualizar».
 
 ## Desarrollo
 
@@ -82,3 +102,7 @@ La maqueta es `diseno/propuesta-visual.html` (ábrela en el navegador). Para vol
 - React, Zustand e idb: licencia MIT.
 - Sonidos (`public/sonidos/`): generados con ElevenLabs para este proyecto; ver `public/sonidos/LICENCIA.md`.
 - Libro de muestra (`public/muestra/`): texto de Cervantes (dominio público) compuesto con EB Garamond (OFL 1.1).
+- Íconos de la app (`public/icono.svg`, `public/iconos/`): propios.
+- Portadas de internet: se muestran desde [Open Library](https://openlibrary.org/dev/docs/api/covers) y
+  [Google Books](https://developers.google.com/books) para uso personal; no se incluyen en el proyecto.
+- Portadas «de tela»: las dibuja la app (propias).

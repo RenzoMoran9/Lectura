@@ -7,6 +7,7 @@ import { useLibros } from '../estado/libros';
 import { colorCss, lazoAlrededor } from '../frases/dibujo';
 import { COLORES_LAPIZ, COLORES_RESALTADOR, esLapiz, LAPICES, rgbDe, type ColorMarca, type Frase } from '../frases/modelo';
 import { Icono } from './Icono';
+import { Pestanas } from './Pestanas';
 
 const sinAcentos = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
@@ -175,9 +176,11 @@ export function MisFrases({ libroId }: { libroId?: string }) {
   return (
     <div className="mis-frases ui">
       <div className="inicio-cont">
-        <button className="volver" onClick={volver}>
-          <Icono nombre="chevron-left" tam={20} /> Volver
-        </button>
+        {libroId && (
+          <button className="volver" onClick={volver}>
+            <Icono nombre="chevron-left" tam={20} /> Volver al libro
+          </button>
+        )}
         <div className="titulo-fila">
           <h1 className="titulo-app">Mis frases</h1>
           {filtradas.length > 0 && (
@@ -260,6 +263,7 @@ export function MisFrases({ libroId }: { libroId?: string }) {
           </>
         )}
       </div>
+      <Pestanas actual="frases" />
       {repasando && <Repasar frases={filtradas} alCerrar={() => setRepasando(false)} alIr={ir} />}
     </div>
   );

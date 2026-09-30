@@ -17,6 +17,10 @@ export interface Ajustes {
   boton: { lado: 'izq' | 'der'; y: number };
   /** Panel lateral con Mis frases del libro (pantallas anchas). */
   panelFrases: boolean;
+  /** Buscar sola la portada original de cada libro en Open Library y Google Books. */
+  portadasEnLinea: boolean;
+  /** Ya no mostrar el aviso de cómo instalar la app en el iPhone. */
+  sinAvisoInstalar: boolean;
   poner: (cambios: Partial<Omit<Ajustes, 'poner'>>) => void;
 }
 
@@ -31,6 +35,8 @@ export const useAjustes = create<Ajustes>()(
       colorLapiz: 'grafito',
       boton: { lado: 'der', y: 1 },
       panelFrases: true,
+      portadasEnLinea: true,
+      sinAvisoInstalar: false,
       poner: (cambios) => set(cambios),
     }),
     { name: 'entre-hojas:ajustes', version: 1 },
