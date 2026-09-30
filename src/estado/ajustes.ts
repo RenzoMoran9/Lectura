@@ -15,6 +15,8 @@ export interface Ajustes {
   colorLapiz: ColorLapiz;
   /** Dónde está el botón de la esquina: el borde y la altura (0 arriba, 1 abajo). */
   boton: { lado: 'izq' | 'der'; y: number };
+  /** Panel lateral con Mis frases del libro (pantallas anchas). */
+  panelFrases: boolean;
   poner: (cambios: Partial<Omit<Ajustes, 'poner'>>) => void;
 }
 
@@ -28,6 +30,7 @@ export const useAjustes = create<Ajustes>()(
       colorResaltador: 'amarillo',
       colorLapiz: 'grafito',
       boton: { lado: 'der', y: 1 },
+      panelFrases: true,
       poner: (cambios) => set(cambios),
     }),
     { name: 'entre-hojas:ajustes', version: 1 },

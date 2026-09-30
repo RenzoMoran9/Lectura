@@ -96,11 +96,13 @@ export const posicionPasada = (P: Vec): Vec => ({ x: -P.x, y: P.y });
 
 /**
  * Cuánto va del recorrido (0 a 1). Solo cuenta la posición, nunca la velocidad:
- *  - adelante, el dedo va desde donde tomó la hoja hasta el borde izquierdo;
+ *  - adelante, el dedo va desde donde tomó la hoja hasta el borde izquierdo (una página) o hasta
+ *    el otro lado del lomo (doble página);
  *  - atrás, la hoja anterior vuelve desde el lomo hasta cubrir la página.
  */
-export function avance(sentido: Sentido, P: Vec, F: Vec): number {
-  const v = sentido === 'adelante' ? (P.x - F.x) / Math.max(P.x, 1) : (F.x + P.x) / Math.max(2 * P.x, 1);
+export function avance(sentido: Sentido, P: Vec, F: Vec, doble = false): number {
+  // En doble página el recorrido completo es de un lado del lomo al otro: la mitad es el lomo.
+  const v = sentido === 'adelante' && !doble ? (P.x - F.x) / Math.max(P.x, 1) : sentido === 'adelante' ? (P.x - F.x) / Math.max(2 * P.x, 1) : (F.x + P.x) / Math.max(2 * P.x, 1);
   return Math.max(0, Math.min(1, v));
 }
 

@@ -85,7 +85,7 @@ export function TextoFrase({ f }: { f: Frase }) {
   );
 }
 
-function Repasar({ frases, alCerrar, alIr }: { frases: Frase[]; alCerrar: () => void; alIr: (f: Frase) => void }) {
+export function Repasar({ frases, alCerrar, alIr }: { frases: Frase[]; alCerrar: () => void; alIr: (f: Frase) => void }) {
   const barajar = () => [...frases].sort(() => Math.random() - 0.5);
   const [mazo, setMazo] = useState(barajar);
   const [i, setI] = useState(0);

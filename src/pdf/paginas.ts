@@ -178,8 +178,63 @@ export class Paginas {
     ctx.restore();
   }
 
+  private detalleEnCurso: { cancel: () => void } | null = null;
+
+  /**
+   * Con zoom: dibuja solo el trozo visible de la página (`region`, px CSS de la hoja) con `k` píxeles
+   * por px CSS, para que el texto se vea nítido. Devuelve el lienzo y dónde va (uv, y hacia arriba).
+   */
+  async dibujarDetalle(
+    indice: number,
+    region: { x: number; y: number; w: number; h: number },
+    k: number,
+  ): Promise<{ lienzo: HTMLCanvasElement; rect: [number, number, number, number] } | null> {
+    this.detalleEnCurso?.cancel();
+    this.detalleEnCurso = null;
+    const m = this.maqueta;
+    const ub = this.ubicaciones.get(indice);
+    const baseLienzo = this.listas.get(indice);
+    if (!m || !ub || !baseLienzo) return null;
+    const ancho = Math.ceil(region.w * k);
+    const alto = Math.ceil(region.h * k);
+    if (ancho < 2 || alto < 2) return null;
+    const lienzo = document.createElement('canvas');
+    lienzo.width = ancho;
+    lienzo.height = alto;
+    const ctx = lienzo.getContext('2d', { alpha: false })!;
+    // Primero la hoja ya dibujada (con su título y número), luego la página del PDF más nítida.
+    ctx.drawImage(baseLienzo, region.x * m.dpr, region.y * m.dpr, region.w * m.dpr, region.h * m.dpr, 0, 0, ancho, alto);
+    const px = (ub.x - region.x) * k;
+    const py = (ub.y - region.y) * k;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(px, py, ub.ancho * ub.escala * k, ub.alto * ub.escala * k);
+    let cancelado = false;
+    try {
+      const pagina = await this.doc.getPage(indice + 1);
+      const vista = pagina.getViewport({ scale: ub.escala * k });
+      const tarea = pagina.render({ canvas: lienzo, viewport: vista, transform: [1, 0, 0, 1, px, py], background: 'rgba(0,0,0,0)' });
+      this.detalleEnCurso = {
+        cancel: () => {
+          cancelado = true;
+          tarea.cancel();
+        },
+      };
+      await tarea.promise;
+    } catch {
+      return null;
+    }
+    if (cancelado) return null;
+    this.detalleEnCurso = null;
+    const u0 = region.x / m.ancho;
+    const u1 = (region.x + region.w) / m.ancho;
+    const v0 = 1 - (region.y + region.h) / m.alto;
+    const v1 = 1 - region.y / m.alto;
+    return { lienzo, rect: [u0, v0, u1, v1] };
+  }
+
   destruir() {
     this.enCurso?.cancelar();
+    this.detalleEnCurso?.cancel();
     this.listas.clear();
   }
 }

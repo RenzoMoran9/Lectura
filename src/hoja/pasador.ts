@@ -1,6 +1,7 @@
 // El gesto de pasar la hoja.
 //  - Hacia adelante, el punto que tomaste de la hoja va pegado a tu dedo.
-//  - Hacia atrás, la hoja anterior vuelve desde el lomo y su doblez sigue a tu dedo.
+//  - Hacia atrás, la hoja anterior vuelve desde el lomo y su doblez sigue a tu dedo. En doble
+//    página se toma la hoja izquierda y también va pegada al dedo.
 //  - Al soltar solo cuenta la posición: antes de la mitad regresa, pasada la mitad cae.
 //    Un toque o un deslizamiento rápido y corto no pasan la hoja.
 
@@ -24,6 +25,8 @@ export interface Pase {
 
 export interface OpcionesPasador {
   tamano: () => { w: number; h: number };
+  /** Doble página: la hoja derecha se toma a la derecha del lomo y la izquierda (x < 0) vuelve atrás. */
+  doble?: () => boolean;
   puede: (s: Sentido) => boolean;
   alCambiar: (pase: Pase | null) => void;
   alTerminar: (s: Sentido, paso: boolean) => void;
@@ -80,7 +83,9 @@ export class Pasador {
         return;
       }
       const sentido: Sentido = dx < 0 ? 'adelante' : 'atras';
-      if (!this.o.puede(sentido)) {
+      // En doble página cada hoja se toma de su lado del lomo.
+      const lado = this.o.doble?.() ? (this.inicio.x < 0 ? 'atras' : 'adelante') : sentido;
+      if (lado !== sentido || !this.o.puede(sentido)) {
         this.fase = 'ignorado';
         return;
       }
@@ -89,7 +94,7 @@ export class Pasador {
     if (this.fase !== 'arrastrando') return;
     const { w } = this.o.tamano();
     const objetivo =
-      this.sentido === 'adelante'
+      this.sentido === 'adelante' || this.o.doble?.()
         ? { x, y }
         : { x: -w + this.factorAtras * (x - this.inicio.x), y: this.P.y + (y - this.inicio.y) };
     this.llevarA(objetivo);
@@ -109,7 +114,7 @@ export class Pasador {
       return;
     }
     if (this.fase !== 'arrastrando') return;
-    const progreso = avance(this.sentido, this.P, this.F);
+    const progreso = avance(this.sentido, this.P, this.F, this.o.doble?.());
     const pasa = pasaLaHoja(progreso);
     const pasada = posicionPasada(this.P);
     const destino = this.sentido === 'adelante' ? (pasa ? pasada : this.P) : pasa ? this.P : pasada;
@@ -136,7 +141,8 @@ export class Pasador {
     if (this.animacion) this.animacion.terminar();
     if (!this.o.puede(sentido)) return;
     const { w, h } = this.o.tamano();
-    this.inicio = { x: sentido === 'adelante' ? w * 0.97 : 0, y: h * 0.1, t: performance.now() };
+    const doble = this.o.doble?.();
+    this.inicio = { x: sentido === 'adelante' ? w * 0.97 : doble ? -w * 0.97 : 0, y: h * 0.1, t: performance.now() };
     this.empezar(sentido);
     const pasada = posicionPasada(this.P);
     const desde = sentido === 'adelante' ? this.P : pasada;
@@ -152,6 +158,10 @@ export class Pasador {
     if (sentido === 'adelante') {
       this.P = { x: Math.max(8, Math.min(w - 1, this.inicio.x)), y: this.inicio.y };
       this.F = { ...this.P };
+    } else if (this.o.doble?.()) {
+      // La hoja izquierda está dada vuelta: el punto que tocaste es su reflejo sobre el lomo.
+      this.P = { x: Math.max(8, Math.min(w - 1, -this.inicio.x)), y: this.inicio.y };
+      this.F = posicionPasada(this.P);
     } else {
       this.P = { x: w, y: this.inicio.y };
       this.F = posicionPasada(this.P);

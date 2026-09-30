@@ -1,4 +1,6 @@
-// Pantalla de lectura: la hoja en WebGL, el gesto de pasarla, el sonido y el recuerdo de la página.
+// Pantalla de lectura: la hoja en WebGL, el gesto de pasarla, el zoom, las marcas, el sonido y el
+// recuerdo de la página. En el celular, una página a la vez; en pantallas anchas, el libro abierto
+// a doble página sobre la mesa, con barras fijas y el panel de Mis frases.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { leerArchivo } from '../datos/archivos';
@@ -11,16 +13,21 @@ import { Marcador, type Previa } from '../frases/marcador';
 import type { Frase } from '../frases/modelo';
 import { leerTextoPagina, type TextoPagina } from '../frases/texto';
 import type { Sentido } from '../hoja/geometria';
-import { densidad, disponer, type Disposicion, type Margenes } from '../hoja/maqueta';
-import { MotorHoja } from '../hoja/motor';
+import { Gestos } from '../hoja/gestos';
+import { densidad, disponer, pliego, type Caja, type Disposicion } from '../hoja/maqueta';
+import { MotorHoja, type Escena } from '../hoja/motor';
 import { Pasador, type Pase } from '../hoja/pasador';
+import { acercarEn, aLienzo, conZoom, limitar, SIN_ZOOM, type Zoom } from '../hoja/zoom';
+import { capituloDe, leerCapitulos, type Capitulo } from '../pdf/indice';
 import { abrirPdf, bytesLeidos, cerrarPdf, type DocumentoPdf } from '../pdf/pdf';
 import { Paginas } from '../pdf/paginas';
 import { sonido } from '../sonido/sonido';
 import { AvisoBreve, AvisoModo, type Mensaje } from './Avisos';
 import { Icono } from './Icono';
 import { MenuEsquina } from './MenuEsquina';
+import { PanelFrases } from './PanelFrases';
 import { PapelYSonido } from './PapelYSonido';
+import { margenesSeguros } from './seguro';
 
 const miles = (n: number) => n.toLocaleString('es');
 
@@ -30,52 +37,63 @@ const miles = (n: number) => n.toLocaleString('es');
  */
 const LIMITE_LEIDO = (import.meta.env.DEV && (globalThis as { __limiteLeido?: number }).__limiteLeido) || 160e6;
 
-/** Márgenes seguros del sistema (muesca, barra de inicio), leídos de CSS. */
-function margenesSeguros(sonda: HTMLElement | null): Margenes {
-  if (!sonda) return { arriba: 0, abajo: 0, izquierda: 0, derecha: 0 };
-  const e = getComputedStyle(sonda);
-  const n = (v: string) => parseFloat(v) || 0;
-  return { arriba: n(e.paddingTop), abajo: n(e.paddingBottom), izquierda: n(e.paddingLeft), derecha: n(e.paddingRight) };
-}
+const PANEL = 340; // ancho del panel de Mis frases
+const BARRA_ARRIBA = 52;
+const BARRA_ABAJO = 56;
 
 export function Lector({ libroId, paginaPedida, desde }: { libroId: string; paginaPedida?: number; desde?: 'inicio' | 'frases' }) {
   const volver = useLibros((s) => s.volver);
   const verFrases = useLibros((s) => s.verFrases);
   const anotarAvance = useLibros((s) => s.anotarAvance);
   const papel = useAjustes((s) => s.papel);
+  const panelFrases = useAjustes((s) => s.panelFrases);
   const herramienta = useFrases((s) => s.herramienta);
 
   const contenedor = useRef<HTMLDivElement>(null);
   const lienzo = useRef<HTMLCanvasElement>(null);
-  const sonda = useRef<HTMLDivElement>(null);
+  const lienzoPrevia = useRef<HTMLCanvasElement>(null);
+  const sombraLibro = useRef<HTMLDivElement>(null);
 
   const [libro, setLibro] = useState<Libro | null>(null);
   const [doc, setDoc] = useState<DocumentoPdf | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pagina, setPagina] = useState<number | null>(null);
   const [disp, setDisp] = useState<Disposicion | null>(null);
+  const [anchoVentana, setAnchoVentana] = useState(window.innerWidth);
   const [cromo, setCromo] = useState(false);
   const [panel, setPanel] = useState(false);
   const [dibujada, setDibujada] = useState(false);
   const [saltoA, setSaltoA] = useState<number | null>(null);
   const [mensaje, setMensaje] = useState<Mensaje | null>(null);
+  const [hayZoom, setHayZoom] = useState(false);
+  const [capitulos, setCapitulos] = useState<Capitulo[]>([]);
   const cerrarMensaje = useCallback(() => setMensaje(null), []);
-  const lienzoPrevia = useRef<HTMLCanvasElement>(null);
-  const marcador = useRef<Marcador | null>(null);
-  const textos = useRef(new Map<number, TextoPagina | 'leyendo'>());
-  const borradasGesto = useRef<Frase[]>([]);
 
   const motor = useRef<MotorHoja | null>(null);
   const paginas = useRef<Paginas | null>(null);
   const pasador = useRef<Pasador | null>(null);
+  const marcador = useRef<Marcador | null>(null);
+  const gestos = useRef<Gestos | null>(null);
   const paginaRef = useRef(0);
   const dispRef = useRef<Disposicion | null>(null);
+  const zoomRef = useRef<Zoom>(SIN_ZOOM);
+  const animZoom = useRef(0);
+  const detalleQuieto = useRef(0);
+  const textos = useRef(new Map<number, TextoPagina | 'leyendo'>());
+  const borradasGesto = useRef<Frase[]>([]);
+  /** Página en la que se está marcando (en doble página puede ser la izquierda o la derecha). */
+  const marcaPagina = useRef<{ indice: number; rect: Caja } | null>(null);
 
   const archivoRef = useRef<Blob | null>(null);
   const docActual = useRef<DocumentoPdf | null>(null);
   const reciclando = useRef(false);
+  const totalRef = useRef(0);
 
-  // 1. Abrir el libro guardado, por partes, en la página donde me quedé.
+  const esDoble = () => dispRef.current?.modo === 'doble';
+  const enMesa = disp?.modo === 'mesa' || disp?.modo === 'doble';
+  const conPanel = enMesa && panelFrases && anchoVentana >= 1100;
+
+  // ---------- 1. Abrir el libro guardado, por partes, en la página donde me quedé ----------
   useEffect(() => {
     let vivo = true;
     (async () => {
@@ -87,6 +105,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       if (!vivo) return cerrarPdf(d);
       archivoRef.current = archivo;
       docActual.current = d;
+      totalRef.current = d.numPages;
       const av = await leerAvance(l.id);
       if (!vivo) return;
       const inicial = Math.max(0, Math.min(d.numPages - 1, paginaPedida ?? av?.pagina ?? 0));
@@ -94,6 +113,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       setLibro(l);
       setDoc(d);
       setPagina(inicial);
+      void leerCapitulos(d).then((c) => vivo && setCapitulos(c));
     })().catch((e) => vivo && setError(e instanceof Error ? e.message : 'No se pudo abrir el libro.'));
     return () => {
       vivo = false;
@@ -121,7 +141,106 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     }
   }, []);
 
-  // 2. Motor WebGL, páginas y gesto.
+  // ---------- Qué páginas se ven ----------
+  const escenaQuieta = useCallback((): Escena => {
+    const p = paginaRef.current;
+    const n = totalRef.current;
+    if (esDoble()) {
+      const { izquierda, derecha } = pliego(p);
+      return { hoja: derecha < n ? derecha : null, izquierda: izquierda >= 0 ? izquierda : null, debajo: null, doblez: null, sombra: 0 };
+    }
+    return { hoja: p, debajo: null, doblez: null, sombra: 0 };
+  }, []);
+
+  const visibles = () => {
+    const p = paginaRef.current;
+    if (!esDoble()) return [p];
+    const { izquierda, derecha } = pliego(p);
+    return [izquierda, derecha].filter((i) => i >= 0 && i < totalRef.current);
+  };
+
+  // ---------- Zoom ----------
+  const aplicarZoom = useCallback((z: Zoom) => {
+    zoomRef.current = z;
+    motor.current?.ponerZoom(z.z, z.x, z.y);
+    const transformar = (el: HTMLElement | null, r: Caja | undefined) => {
+      if (!el || !r) return;
+      el.style.transform = `translate(${z.x + z.z * r.x}px, ${z.y + z.z * r.y}px) scale(${z.z})`;
+    };
+    transformar(sombraLibro.current, dispRef.current?.libro);
+    transformar(lienzoPrevia.current, marcaPagina.current?.rect ?? dispRef.current?.hoja);
+    setHayZoom(conZoom(z));
+  }, []);
+
+  const pintarDetalle = useCallback(() => {
+    const m = motor.current;
+    const pags = paginas.current;
+    const d = dispRef.current;
+    const el = contenedor.current;
+    if (!m || !pags || !d || !el) return;
+    const z = zoomRef.current;
+    if (!conZoom(z)) return m.quitarDetalles();
+    const tam = pags.lienzoTam;
+    if (!tam) return;
+    const vw = el.clientWidth;
+    const vh = el.clientHeight;
+    const k = Math.min(window.devicePixelRatio || 1, 2.5) * z.z;
+    for (const i of visibles()) {
+      const izquierda = esDoble() && i === pliego(paginaRef.current).izquierda;
+      const r = izquierda ? { ...d.hoja, x: d.hoja.x - d.hoja.w } : d.hoja;
+      // Parte visible de la página, en px CSS de la hoja.
+      const a = aLienzo(z, 0, 0);
+      const b = aLienzo(z, vw, vh);
+      const x0 = Math.max(r.x, a.x);
+      const y0 = Math.max(r.y, a.y);
+      const x1 = Math.min(r.x + r.w, b.x);
+      const y1 = Math.min(r.y + r.h, b.y);
+      if (x1 - x0 < 2 || y1 - y0 < 2) {
+        m.ponerDetalle(i, null);
+        continue;
+      }
+      const region = { x: x0 - r.x, y: y0 - r.y, w: x1 - x0, h: y1 - y0 };
+      const kk = Math.min(k, Math.sqrt(9e6 / (region.w * region.h)));
+      void pags.dibujarDetalle(i, region, kk).then((res) => {
+        if (res && conZoom(zoomRef.current)) m.ponerDetalle(i, res.lienzo, res.rect);
+      });
+    }
+  }, []);
+
+  const programarDetalle = useCallback(() => {
+    clearTimeout(detalleQuieto.current);
+    detalleQuieto.current = window.setTimeout(pintarDetalle, 150);
+  }, [pintarDetalle]);
+
+  const ponerZoom = useCallback(
+    (z: Zoom, animar = false) => {
+      const d = dispRef.current;
+      const el = contenedor.current;
+      if (!d || !el) return;
+      const destino = limitar(z, d.libro, { w: el.clientWidth, h: el.clientHeight });
+      cancelAnimationFrame(animZoom.current);
+      if (!animar) return aplicarZoom(destino);
+      const desdeZ = zoomRef.current;
+      const t0 = performance.now();
+      const paso = () => {
+        const t = Math.min(1, (performance.now() - t0) / 240);
+        const e = 1 - Math.pow(1 - t, 3);
+        aplicarZoom({ z: desdeZ.z + (destino.z - desdeZ.z) * e, x: desdeZ.x + (destino.x - desdeZ.x) * e, y: desdeZ.y + (destino.y - desdeZ.y) * e });
+        if (t < 1) animZoom.current = requestAnimationFrame(paso);
+        else programarDetalle();
+      };
+      animZoom.current = requestAnimationFrame(paso);
+    },
+    [aplicarZoom, programarDetalle],
+  );
+
+  const quitarZoom = useCallback(() => {
+    cancelAnimationFrame(animZoom.current);
+    aplicarZoom(SIN_ZOOM);
+    motor.current?.quitarDetalles();
+  }, [aplicarZoom]);
+
+  // ---------- 2. Motor WebGL, páginas, marcas y gestos ----------
   useEffect(() => {
     if (!doc || !libro || !lienzo.current) return;
     let m: MotorHoja;
@@ -134,7 +253,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     motor.current = m;
     void m.ponerPapel(useAjustes.getState().papel);
 
-    const pags = new Paginas(doc);
+    const pags = new Paginas(docActual.current ?? doc);
     paginas.current = pags;
 
     // Marcas de cada página: un lienzo blanco con sus frases, que el shader multiplica con la página.
@@ -160,40 +279,107 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     pags.onLista = (i, c) => {
       m.subirPagina(i, c);
       pintarMarcas(i);
-      if (i === paginaRef.current) setDibujada(true);
+      if (visibles().includes(i)) setDibujada(visibles().every((j) => !!pags.obtener(j)));
     };
     pags.onSoltada = (i) => {
       lienzosMarcas.delete(i);
       m.soltarPagina(i);
     };
 
-    marcador.current = new Marcador({
+    const quieta = () => m.poner(escenaQuieta());
+
+    const p = new Pasador({
+      tamano: () => {
+        const h = dispRef.current?.hoja;
+        return { w: h?.w ?? 1, h: h?.h ?? 1 };
+      },
+      doble: esDoble,
+      puede: (s) => {
+        const n = totalRef.current;
+        const pa = paginaRef.current;
+        if (esDoble()) {
+          const { izquierda, derecha } = pliego(pa);
+          return s === 'adelante' ? derecha + 1 < n : izquierda >= 1;
+        }
+        return s === 'adelante' ? pa < n - 1 : pa > 0;
+      },
+      alCambiar: (pase: Pase | null) => {
+        if (!pase) return quieta();
+        const n = totalRef.current;
+        const pa = paginaRef.current;
+        const { doblez, sombra } = pase;
+        if (esDoble()) {
+          const { izquierda: iz, derecha: de } = pliego(pa);
+          const o = (i: number) => (i >= 0 && i < n ? i : null);
+          m.poner(
+            pase.sentido === 'adelante'
+              ? { hoja: de, reverso: o(de + 1), debajo: o(de + 2), izquierda: o(iz), doblez, sombra }
+              : { hoja: o(iz - 1), reverso: iz, debajo: o(de), izquierda: o(iz - 2), doblez, sombra },
+          );
+          return;
+        }
+        m.poner(pase.sentido === 'adelante' ? { hoja: pa, debajo: pa + 1, doblez, sombra } : { hoja: pa - 1, debajo: pa, doblez, sombra });
+      },
+      alTerminar: (s: Sentido, paso: boolean) => {
+        sonido.pararRoce();
+        if (paso) {
+          if (esDoble()) {
+            const { izquierda, derecha } = pliego(paginaRef.current);
+            paginaRef.current = s === 'adelante' ? derecha + 1 : Math.max(0, izquierda - 2);
+          } else paginaRef.current += s === 'adelante' ? 1 : -1;
+          setPagina(paginaRef.current);
+          void revisarMemoria();
+        }
+        quieta();
+      },
+      alEmpezar: () => {
+        setCromo(false);
+        sonido.empezarRoce();
+      },
+      alMover: (v) => sonido.moverRoce(v),
+      alAsentar: (f) => {
+        sonido.pararRoce();
+        sonido.golpe(f);
+      },
+    });
+    pasador.current = p;
+
+    const mk = new Marcador({
       herramienta: () => useFrases.getState().herramienta,
       color: () => {
         const a = useAjustes.getState();
         return useFrases.getState().herramienta === 'lapiz' ? a.colorLapiz : a.colorResaltador;
       },
       libroId: () => libro.id,
-      pagina: () => paginaRef.current,
-      ubicacion: () => pags.ubicacion(paginaRef.current),
+      pagina: () => marcaPagina.current?.indice ?? paginaRef.current,
+      ubicacion: () => pags.ubicacion(marcaPagina.current?.indice ?? paginaRef.current),
       texto: () => {
-        const t = textos.current.get(paginaRef.current);
+        const t = textos.current.get(marcaPagina.current?.indice ?? paginaRef.current);
         return t && t !== 'leyendo' ? t : null;
       },
       lienzoPagina: () => {
-        const lienzo = pags.obtener(paginaRef.current);
+        const l = pags.obtener(marcaPagina.current?.indice ?? paginaRef.current);
         const tam = pags.lienzoTam;
-        return lienzo && tam ? { lienzo, dpr: tam.dpr } : undefined;
+        return l && tam ? { lienzo: l, dpr: tam.dpr } : undefined;
       },
-      frasesPagina: () => useFrases.getState().frases.filter((f) => f.libroId === libro.id && f.pagina === paginaRef.current),
-      previa: (p) => dibujarPrevia(p),
+      frasesPagina: () => {
+        const i = marcaPagina.current?.indice ?? paginaRef.current;
+        return useFrases.getState().frases.filter((f) => f.libroId === libro.id && f.pagina === i);
+      },
+      previa: (pv) => dibujarPrevia(pv),
       guardar: (f, donde) => {
         void useFrases.getState().agregar({ ...f, libroTitulo: libro.titulo });
         // La marca ya quedó en la página: la vista previa se borra en cuanto se dibuja.
         requestAnimationFrame(() => requestAnimationFrame(() => dibujarPrevia(null)));
         const r = contenedor.current?.getBoundingClientRect();
-        const h = dispRef.current?.hoja;
-        setMensaje({ texto: 'Guardada en Mis frases', x: (r?.left ?? 0) + (h?.x ?? 0) + donde.x, y: (r?.top ?? 0) + (h?.y ?? 0) + donde.y, clave: Date.now() });
+        const rect = marcaPagina.current?.rect ?? dispRef.current?.hoja;
+        const z = zoomRef.current;
+        setMensaje({
+          texto: 'Guardada en Mis frases',
+          x: (r?.left ?? 0) + z.x + z.z * ((rect?.x ?? 0) + donde.x),
+          y: (r?.top ?? 0) + z.y + z.z * ((rect?.y ?? 0) + donde.y),
+          clave: Date.now(),
+        });
       },
       borrar: (ids) => {
         void useFrases
@@ -210,49 +396,82 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           });
       },
     });
+    marcador.current = mk;
 
-    const quieta = () => m.poner({ hoja: paginaRef.current, debajo: null, doblez: null, sombra: 0 });
+    // Del lector (px CSS) a la hoja: pasar la hoja usa y hacia arriba, con el lomo en x = 0.
+    const aHoja = (x: number, y: number) => {
+      const c = aLienzo(zoomRef.current, x, y);
+      const h = dispRef.current?.hoja ?? { x: 0, y: 0, w: 1, h: 1 };
+      return { x: c.x - h.x, y: h.y + h.h - c.y };
+    };
 
-    const p = new Pasador({
-      tamano: () => {
-        const h = dispRef.current?.hoja;
-        return { w: h?.w ?? 1, h: h?.h ?? 1 };
+    gestos.current = new Gestos({
+      zoom: () => zoomRef.current,
+      ponerZoom: (z, animar) => ponerZoom(z, animar),
+      herramienta: () => !!useFrases.getState().herramienta,
+      pasar: {
+        bajar: (x, y, id) => {
+          const q = aHoja(x, y);
+          const d = dispRef.current;
+          // Sobre la mesa solo se toma el libro (con un poco de margen afuera).
+          if (d && d.modo !== 'celular') {
+            const izq = d.modo === 'doble' ? -d.hoja.w - 24 : -4;
+            if (q.x < izq || q.x > d.hoja.w + 24 || q.y < -16 || q.y > d.hoja.h + 16) return;
+          }
+          p.bajar(q.x, q.y, id);
+        },
+        mover: (x, y, id) => {
+          const q = aHoja(x, y);
+          p.mover(q.x, q.y, id);
+        },
+        subir: (x, y, id) => {
+          const q = aHoja(x, y);
+          p.subir(q.x, q.y, id);
+        },
+        cancelar: () => p.cancelar(),
       },
-      puede: (s) => (s === 'adelante' ? paginaRef.current < doc.numPages - 1 : paginaRef.current > 0),
-      alCambiar: (pase: Pase | null) => {
-        if (!pase) return quieta();
-        const actual = paginaRef.current;
-        m.poner(
-          pase.sentido === 'adelante'
-            ? { hoja: actual, debajo: actual + 1, doblez: pase.doblez, sombra: pase.sombra }
-            : { hoja: actual - 1, debajo: actual, doblez: pase.doblez, sombra: pase.sombra },
-        );
+      marcar: {
+        bajar: (x, y, id) => {
+          if (p.ocupado) return;
+          const c = aLienzo(zoomRef.current, x, y);
+          const d = dispRef.current;
+          if (!d) return;
+          const { izquierda, derecha } = pliego(paginaRef.current);
+          const enIzquierda = d.modo === 'doble' && c.x < d.hoja.x;
+          const indice = d.modo === 'doble' ? (enIzquierda ? izquierda : derecha) : paginaRef.current;
+          if (indice < 0 || indice >= totalRef.current) return;
+          const rect = enIzquierda ? { ...d.hoja, x: d.hoja.x - d.hoja.w } : d.hoja;
+          marcaPagina.current = { indice, rect };
+          aplicarZoom(zoomRef.current); // la vista previa va sobre esta página
+          borradasGesto.current = [];
+          mk.bajar(c.x - rect.x, c.y - rect.y, id);
+        },
+        mover: (x, y, id) => {
+          const c = aLienzo(zoomRef.current, x, y);
+          const r = marcaPagina.current?.rect;
+          if (r) mk.mover(c.x - r.x, c.y - r.y, id);
+        },
+        subir: (_x, _y, id) => mk.subir(id),
+        cancelar: () => mk.cancelar(),
       },
-      alTerminar: (s: Sentido, paso: boolean) => {
-        sonido.pararRoce();
-        if (paso) {
-          paginaRef.current += s === 'adelante' ? 1 : -1;
-          setPagina(paginaRef.current);
-          void revisarMemoria();
-        }
-        quieta();
+      tocar: () => {
+        const d = dispRef.current;
+        if (!useFrases.getState().herramienta && d?.modo === 'celular') setCromo((c) => !c);
       },
-      alTocar: () => !useFrases.getState().herramienta && setCromo((c) => !c),
-      alEmpezar: () => {
-        setCromo(false);
-        sonido.empezarRoce();
+      dobleToque: (x, y) => {
+        if (useFrases.getState().herramienta) return;
+        if (conZoom(zoomRef.current)) ponerZoom(SIN_ZOOM, true);
+        else ponerZoom(acercarEn(zoomRef.current, 2.5, x, y), true);
       },
-      alMover: (v) => sonido.moverRoce(v),
-      alAsentar: (f) => {
-        sonido.pararRoce();
-        sonido.golpe(f);
-      },
+      finZoom: programarDetalle,
     });
-    pasador.current = p;
+
     quieta();
 
     return () => {
       dejarDeEscuchar();
+      gestos.current?.destruir();
+      gestos.current = null;
       marcador.current = null;
       p.destruir();
       pags.destruir();
@@ -261,9 +480,9 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       paginas.current = null;
       pasador.current = null;
     };
-  }, [doc, libro, revisarMemoria]);
+  }, [doc, libro, revisarMemoria, escenaQuieta, ponerZoom, aplicarZoom, programarDetalle]);
 
-  // 3. Medir la pantalla y acomodar la hoja (también al girar el celular).
+  // ---------- 3. Medir la pantalla y acomodar el libro (también al girar el celular) ----------
   useEffect(() => {
     if (!doc || !libro) return;
     const el = contenedor.current;
@@ -279,14 +498,22 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       const w = el.clientWidth;
       const h = el.clientHeight;
       if (!w || !h) return;
-      const d = disponer(w, h, margenesSeguros(sonda.current), aspecto);
+      setAnchoVentana(window.innerWidth);
+      const ancha = !(w / h < 0.9 || w < 560);
+      const d = disponer(w, h, margenesSeguros(), aspecto, ancha ? { barraArriba: BARRA_ARRIBA, barraAbajo: BARRA_ABAJO } : {});
       const dpr = densidad(window.devicePixelRatio, d.hoja.w, d.hoja.h);
+      const cambioModo = dispRef.current?.modo !== d.modo;
       dispRef.current = d;
       setDisp(d);
       pasador.current?.cancelar();
       marcador.current?.cancelar();
-      motor.current?.medir(w, h, dpr, d.hoja, d.modo === 'mesa');
+      quitarZoom();
+      motor.current?.medir(w, h, dpr, d.hoja, { recortarLomo: d.modo === 'mesa', doble: d.modo === 'doble' });
       paginas.current?.configurar({ ancho: d.hoja.w, alto: d.hoja.h, dpr, caja: d.caja, titulo: libro.titulo });
+      if (cambioModo) {
+        motor.current?.poner(escenaQuieta());
+        pedirPaginas();
+      }
     };
     const obs = new ResizeObserver(medir);
     obs.observe(el);
@@ -295,9 +522,18 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       vivo = false;
       obs.disconnect();
     };
-  }, [doc, libro]);
+  }, [doc, libro, escenaQuieta, quitarZoom]);
 
-  // 4. Al cambiar de página: dibujar la actual y sus vecinas, y recordar dónde voy.
+  // ---------- 4. Al cambiar de página: dibujar las vecinas y recordar dónde voy ----------
+  const pedirPaginas = () => {
+    const p = paginaRef.current;
+    if (esDoble()) {
+      const { izquierda: iz, derecha: de } = pliego(p);
+      paginas.current?.pedir([de, iz, de + 1, de + 2, iz - 1, iz - 2]);
+    } else paginas.current?.pedir([p, p + 1, p - 1, p + 2, p - 2]);
+    setDibujada(visibles().every((i) => !!paginas.current?.obtener(i)));
+  };
+
   const pendiente = useRef<Avance | null>(null);
   const anotar = useCallback(() => {
     const avance = pendiente.current;
@@ -307,14 +543,17 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     anotarAvance(avance);
   }, [anotarAvance]);
 
+  const capitulo = pagina !== null ? capituloDe(capitulos, pagina) : undefined;
+
   useEffect(() => {
     if (pagina === null || !doc || !libro) return;
-    paginas.current?.pedir([pagina, pagina + 1, pagina - 1, pagina + 2, pagina - 2]);
-    setDibujada(!!paginas.current?.obtener(pagina));
-    pendiente.current = { libroId: libro.id, pagina, total: doc.numPages, actualizado: Date.now() };
+    pedirPaginas();
+    motor.current?.quitarDetalles();
+    pendiente.current = { libroId: libro.id, pagina, total: doc.numPages, actualizado: Date.now(), capitulo };
     const t = setTimeout(anotar, 250);
     return () => clearTimeout(t);
-  }, [pagina, doc, libro, anotar]);
+    // pedirPaginas lee refs: no hace falta como dependencia.
+  }, [pagina, doc, libro, anotar, capitulo]);
 
   // Al salir del libro o de la app, lo último queda guardado.
   useEffect(() => {
@@ -332,20 +571,22 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     void motor.current?.ponerPapel(papel);
   }, [papel]);
 
-  // Con el resaltador o el lápiz se lee la capa de texto de la página (una vez por página).
+  // Con el resaltador o el lápiz se lee la capa de texto de las páginas visibles (una vez por página).
   useEffect(() => {
     const d = docActual.current;
     if (pagina === null || !d || (herramienta !== 'resaltador' && herramienta !== 'lapiz')) return;
     const cache = textos.current;
-    if (cache.has(pagina)) return;
-    cache.set(pagina, 'leyendo');
-    d.getPage(pagina + 1)
-      .then(leerTextoPagina)
-      .then((t) => cache.set(pagina, t))
-      .catch(() => cache.delete(pagina));
+    for (const i of visibles()) {
+      if (cache.has(i)) continue;
+      cache.set(i, 'leyendo');
+      d.getPage(i + 1)
+        .then(leerTextoPagina)
+        .then((t) => cache.set(i, t))
+        .catch(() => cache.delete(i));
+    }
     // Solo se guardan unas pocas páginas.
-    if (cache.size > 12) cache.delete(cache.keys().next().value!);
-  }, [pagina, herramienta, doc]);
+    while (cache.size > 12) cache.delete(cache.keys().next().value!);
+  }, [pagina, herramienta, doc, disp?.modo]);
 
   useEffect(() => {
     if (herramienta) setCromo(false);
@@ -355,14 +596,14 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   // Al salir del libro se vuelve a leer: la próxima vez el dedo pasa la hoja.
   useEffect(() => () => useFrases.getState().usar(null), []);
 
-  /** Vista previa de la marca mientras el dedo la hace (encima de la hoja). */
-  const dibujarPrevia = useCallback((p: Previa) => {
+  /** Vista previa de la marca mientras el dedo la hace (encima de la página que se marca). */
+  const dibujarPrevia = useCallback((pv: Previa) => {
     const c = lienzoPrevia.current;
     const pags = paginas.current;
-    const h = dispRef.current?.hoja;
-    if (!c || !pags || !h) return;
+    const mp = marcaPagina.current;
+    if (!c || !pags || !mp) return;
     const tam = pags.lienzoTam;
-    const ub = pags.ubicacion(paginaRef.current);
+    const ub = pags.ubicacion(mp.indice);
     if (!tam || !ub) return;
     if (c.width !== tam.ancho || c.height !== tam.alto) {
       c.width = tam.ancho;
@@ -370,102 +611,129 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     }
     const ctx = c.getContext('2d')!;
     ctx.clearRect(0, 0, c.width, c.height);
-    if (!p) return;
+    if (!pv) return;
     ctx.globalCompositeOperation = 'multiply';
-    dibujarFrase(ctx, { id: 'previa', ...p }, { x: ub.x, y: ub.y, escala: ub.escala, dpr: tam.dpr });
+    dibujarFrase(ctx, { id: 'previa', ...pv }, { x: ub.x, y: ub.y, escala: ub.escala, dpr: tam.dpr });
     ctx.globalCompositeOperation = 'source-over';
   }, []);
 
-  // 5. Teclado: ← → (y avance de página) pasan la hoja con el mismo sonido.
+  const irA = useCallback(
+    (n: number) => {
+      if (!doc) return;
+      const destino = Math.max(0, Math.min(doc.numPages - 1, n));
+      quitarZoom();
+      paginaRef.current = destino;
+      setPagina(destino);
+      void revisarMemoria();
+      motor.current?.poner(escenaQuieta());
+    },
+    [doc, quitarZoom, revisarMemoria, escenaQuieta],
+  );
+
+  // ---------- 5. Teclado: ← → pasan la hoja; Ctrl + / − / 0 acercan ----------
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
-      if (panel || e.altKey || e.metaKey || e.ctrlKey) return;
+      if (panel || e.altKey) return;
+      const el = contenedor.current;
+      if ((e.ctrlKey || e.metaKey) && el) {
+        const cx = el.clientWidth / 2;
+        const cy = el.clientHeight / 2;
+        const z = zoomRef.current;
+        if (e.key === '+' || e.key === '=') ponerZoom(acercarEn(z, z.z * 1.4, cx, cy), true);
+        else if (e.key === '-') ponerZoom(acercarEn(z, z.z / 1.4, cx, cy), true);
+        else if (e.key === '0') ponerZoom(SIN_ZOOM, true);
+        else return;
+        e.preventDefault();
+        return;
+      }
       const adelante = ['ArrowRight', 'PageDown', ' '].includes(e.key);
       const atras = ['ArrowLeft', 'PageUp'].includes(e.key);
       if (!adelante && !atras) return;
       e.preventDefault();
+      if (conZoom(zoomRef.current)) quitarZoom();
       sonido.despertar();
       pasador.current?.pasarSola(adelante ? 'adelante' : 'atras');
     };
     window.addEventListener('keydown', tecla);
     return () => window.removeEventListener('keydown', tecla);
-  }, [panel]);
+  }, [panel, ponerZoom, quitarZoom]);
 
-  // Coordenadas de la hoja: origen abajo a la izquierda, en px CSS.
-  const aHoja = useCallback((e: React.PointerEvent) => {
+  // Rueda: Ctrl + rueda acerca (y el navegador no hace su propio zoom); con zoom, la rueda desplaza.
+  useEffect(() => {
+    const el = contenedor.current;
+    if (!el) return;
+    const rueda = (e: WheelEvent) => {
+      const r = el.getBoundingClientRect();
+      const usado = gestos.current?.rueda(e, e.clientX - r.left, e.clientY - r.top);
+      if (usado || e.ctrlKey) e.preventDefault();
+    };
+    // Safari (iPhone) tiene su propio pellizco: se desactiva para que mande el nuestro.
+    const gesto = (e: Event) => e.preventDefault();
+    el.addEventListener('wheel', rueda, { passive: false });
+    document.addEventListener('gesturestart', gesto);
+    return () => {
+      el.removeEventListener('wheel', rueda);
+      document.removeEventListener('gesturestart', gesto);
+    };
+  }, [doc]);
+
+  // El panel lateral cambia el espacio del libro: se vuelve a medir.
+  useEffect(() => {
+    window.dispatchEvent(new Event('resize'));
+  }, [panelFrases]);
+
+  // ---------- Toques ----------
+  const enLector = (e: React.PointerEvent) => {
     const r = contenedor.current!.getBoundingClientRect();
-    const h = dispRef.current?.hoja ?? { x: 0, y: 0, w: r.width, h: r.height };
-    return { x: e.clientX - r.left - h.x, y: h.y + h.h - (e.clientY - r.top) };
-  }, []);
-
-  // Coordenadas para marcar: origen arriba a la izquierda de la hoja.
-  const aHojaArriba = useCallback((e: React.PointerEvent) => {
-    const r = contenedor.current!.getBoundingClientRect();
-    const h = dispRef.current?.hoja ?? { x: 0, y: 0 };
-    return { x: e.clientX - r.left - h.x, y: e.clientY - r.top - h.y };
-  }, []);
-
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
   const bajar = (e: React.PointerEvent) => {
-    if (e.button !== 0 || !pasador.current) return;
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
     sonido.despertar();
-    if (useFrases.getState().herramienta && marcador.current) {
-      // Con una herramienta, el dedo marca y la hoja no se pasa.
-      if (pasador.current.ocupado) return;
-      borradasGesto.current = [];
-      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-      const q = aHojaArriba(e);
-      marcador.current.bajar(q.x, q.y, e.pointerId);
-      return;
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* algunos navegadores no dejan capturar: el gesto sigue igual */
     }
-    const p = aHoja(e);
-    const h = dispRef.current?.hoja;
-    // En pantalla ancha solo se toma la hoja (con un poco de margen a la derecha).
-    if (h && dispRef.current?.modo === 'mesa' && (p.x < 0 || p.x > h.w + 24 || p.y < -12 || p.y > h.h + 12)) {
-      if (!pasador.current.ocupado) setCromo((c) => !c);
-      return;
-    }
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    pasador.current.bajar(p.x, p.y, e.pointerId);
+    const q = enLector(e);
+    gestos.current?.bajar(q.x, q.y, e.pointerId);
   };
   const mover = (e: React.PointerEvent) => {
-    if (useFrases.getState().herramienta) {
-      const q = aHojaArriba(e);
-      return marcador.current?.mover(q.x, q.y, e.pointerId);
-    }
-    const p = aHoja(e);
-    pasador.current?.mover(p.x, p.y, e.pointerId);
+    const q = enLector(e);
+    gestos.current?.mover(q.x, q.y, e.pointerId);
   };
   const subir = (e: React.PointerEvent) => {
     // En el celular el navegador solo deja encender el audio al levantar el dedo.
     sonido.despertar();
-    marcador.current?.subir(e.pointerId);
-    const p = aHoja(e);
-    pasador.current?.subir(p.x, p.y, e.pointerId);
+    const q = enLector(e);
+    gestos.current?.subir(q.x, q.y, e.pointerId);
   };
-  const cancelar = () => {
-    marcador.current?.cancelar();
-    pasador.current?.cancelar();
-  };
-
-  const irA = (n: number) => {
-    if (!doc) return;
-    const destino = Math.max(0, Math.min(doc.numPages - 1, n));
-    paginaRef.current = destino;
-    setPagina(destino);
-    void revisarMemoria();
-    motor.current?.poner({ hoja: destino, debajo: null, doblez: null, sombra: 0 });
-  };
+  const cancelar = (e: React.PointerEvent) => gestos.current?.cancelar(e.pointerId);
 
   const total = doc?.numPages ?? 0;
   const noche = papel === 'noche';
   const mostrada = saltoA ?? pagina ?? 0;
+  const pl = pliego(mostrada);
+  const etiquetaPagina =
+    disp?.modo === 'doble'
+      ? pl.izquierda < 0
+        ? `${miles(pl.derecha + 1)}`
+        : pl.derecha >= total
+          ? `${miles(pl.izquierda + 1)}`
+          : `${miles(pl.izquierda + 1)}–${miles(pl.derecha + 1)}`
+      : miles(mostrada + 1);
+  const tituloBarra = [libro?.titulo, capitulo].filter(Boolean).join(' · ');
+  const irASalto = () => {
+    if (saltoA !== null) irA(saltoA);
+    setSaltoA(null);
+  };
 
   return (
-    <div className={`lector ${disp?.modo === 'mesa' ? 'en-mesa' : ''} papel-fondo-${papel}`}>
-      <div className="sonda-segura" ref={sonda} aria-hidden="true" />
+    <div className={`lector ${enMesa ? 'en-mesa' : ''} ${disp?.modo === 'doble' ? 'en-doble' : ''} ${hayZoom ? 'con-zoom' : ''} papel-fondo-${papel}`}>
       <div
         ref={contenedor}
         className="lector-hoja"
+        style={conPanel ? { right: PANEL } : undefined}
         onPointerDown={bajar}
         onPointerMove={mover}
         onPointerUp={subir}
@@ -473,18 +741,18 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         onLostPointerCapture={cancelar}
         onContextMenu={(e) => e.preventDefault()}
       >
-        {disp?.modo === 'mesa' && (
-          <div className="sombra-hoja" style={{ left: disp.hoja.x, top: disp.hoja.y, width: disp.hoja.w, height: disp.hoja.h }} />
+        {enMesa && disp && (
+          <div ref={sombraLibro} className="sombra-hoja" style={{ width: disp.libro.w, height: disp.libro.h, transform: `translate(${disp.libro.x}px, ${disp.libro.y}px)` }} />
         )}
         <canvas ref={lienzo} className="lienzo-hoja" />
         {disp && (
           <canvas
             ref={lienzoPrevia}
             className={`lienzo-previa ${noche ? 'en-noche' : ''}`}
-            style={{ left: disp.hoja.x, top: disp.hoja.y, width: disp.hoja.w, height: disp.hoja.h }}
+            style={{ width: disp.hoja.w, height: disp.hoja.h, transform: `translate(${disp.hoja.x}px, ${disp.hoja.y}px)` }}
           />
         )}
-        {!error && (!doc || !dibujada) && <div className={`cargando ${noche ? 'claro' : ''}`}>{doc ? 'Dibujando la página…' : 'Abriendo el libro…'}</div>}
+        {!error && (!doc || !dibujada) && <div className={`cargando ${noche || enMesa ? 'claro' : ''}`}>{doc ? 'Dibujando la página…' : 'Abriendo el libro…'}</div>}
       </div>
 
       {error && (
@@ -496,15 +764,25 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         </div>
       )}
 
-      <div className={`cromo-arriba ${cromo ? 'visible' : ''}`}>
+      <div className={`cromo-arriba ${cromo || enMesa ? 'visible' : ''} ${enMesa ? 'fijo' : ''}`} style={conPanel ? { right: PANEL } : undefined}>
         <button className="volver" onClick={volver}>
           <Icono nombre="chevron-left" tam={20} /> {desde === 'frases' ? 'Mis frases' : 'Estante'}
         </button>
-        <div className="cromo-titulo">{libro?.titulo}</div>
+        <div className="cromo-titulo">{enMesa ? tituloBarra : libro?.titulo}</div>
+        {enMesa && anchoVentana >= 1100 && (
+          <button
+            className={`icono-barra ${panelFrases ? 'on' : ''}`}
+            onClick={() => useAjustes.getState().poner({ panelFrases: !panelFrases })}
+            aria-label={panelFrases ? 'Ocultar Mis frases' : 'Mostrar Mis frases'}
+            title="Mis frases de este libro"
+          >
+            <Icono nombre="panel-right" tam={20} />
+          </button>
+        )}
       </div>
 
-      <div className={`cromo-abajo ${cromo ? 'visible' : ''}`}>
-        <span className="cromo-pag">{miles(mostrada + 1)}</span>
+      <div className={`cromo-abajo ${cromo || enMesa ? 'visible' : ''} ${enMesa ? 'fijo' : ''}`} style={conPanel ? { right: PANEL } : undefined}>
+        <span className="cromo-pag">{etiquetaPagina}</span>
         <input
           type="range"
           min={0}
@@ -514,23 +792,32 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           aria-label="Ir a la página"
           style={{ '--v': `${total > 1 ? (mostrada / (total - 1)) * 100 : 0}%` } as React.CSSProperties}
           onChange={(e) => setSaltoA(Number(e.target.value))}
-          onPointerUp={() => {
-            if (saltoA !== null) irA(saltoA);
-            setSaltoA(null);
-          }}
-          onKeyUp={() => {
-            if (saltoA !== null) irA(saltoA);
-            setSaltoA(null);
-          }}
+          onPointerUp={irASalto}
+          onKeyUp={irASalto}
         />
         <span className="cromo-pag">de {miles(total)}</span>
       </div>
 
+      {conPanel && libro && (
+        <PanelFrases libroId={libro.id} alIr={irA} alCerrar={() => useAjustes.getState().poner({ panelFrases: false })} />
+      )}
+
       <AvisoModo />
       <AvisoBreve mensaje={mensaje} alCerrar={cerrarMensaje} />
+      {hayZoom && !herramienta && (
+        <button className="quitar-zoom" onClick={() => ponerZoom(SIN_ZOOM, true)}>
+          Tamaño normal
+        </button>
+      )}
 
       {doc && (
-        <MenuEsquina alPapel={() => setPanel(true)} alFrases={() => verFrases(libroId)} alAbrir={() => setCromo(false)} />
+        <MenuEsquina
+          alPapel={() => setPanel(true)}
+          alFrases={() => verFrases(libroId)}
+          alAbrir={() => setCromo(false)}
+          margenDerecho={conPanel ? PANEL : 0}
+          margenAbajo={enMesa ? BARRA_ABAJO : 0}
+        />
       )}
 
       {panel && <PapelYSonido alCerrar={() => setPanel(false)} />}

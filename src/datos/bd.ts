@@ -23,6 +23,8 @@ export interface Avance {
   pagina: number; // índice desde 0
   total: number;
   actualizado: number;
+  /** Capítulo en el que va (del índice del PDF), si lo tiene. */
+  capitulo?: string;
 }
 
 interface Esquema extends DBSchema {

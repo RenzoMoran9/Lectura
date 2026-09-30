@@ -13,10 +13,26 @@ export interface Rect {
 }
 
 export interface Escena {
-  hoja: number | null; // página que se ve encima (o que se está pasando)
+  hoja: number | null; // página que se ve encima (o que se está pasando); la derecha en doble página
   debajo: number | null; // página de abajo, mientras se pasa la hoja
   doblez: Doblez | null;
   sombra: number; // 0..1
+  /** Doble página: la página de la izquierda (quieta) y la que va al dorso de la hoja que se pasa. */
+  izquierda?: number | null;
+  reverso?: number | null;
+}
+
+export interface OpcionesVista {
+  /** Lo que pasa del lomo hacia la izquierda no se dibuja (una sola página sobre la mesa). */
+  recortarLomo?: boolean;
+  /** Libro abierto a doble página: la hoja es la página derecha; la izquierda va al otro lado del lomo. */
+  doble?: boolean;
+}
+
+interface Detalle {
+  tex: WebGLTexture;
+  fuente: TexImageSource;
+  rect: [number, number, number, number];
 }
 
 const TIPO_NUM: Record<TipoPapel, number> = { blanco: 0, crema: 1, antiguo: 2, noche: 3 };
@@ -48,6 +64,10 @@ export class MotorHoja {
   private ultimoCuadro = 0;
   private hojaRect: Rect = { x: 0, y: 0, w: 1, h: 1 };
   private recortarLomo = false;
+  private doble = false;
+  /** Acercamiento (px CSS de la pantalla, y hacia abajo): pantalla = (x, y) + zoom · lienzo. */
+  private zoom = { z: 1, x: 0, y: 0 };
+  private detalles = new Map<number, Detalle>();
   private escena: Escena = { hoja: null, debajo: null, doblez: null, sombra: 1 };
   private pedido = 0;
   private perdido = false;
@@ -64,6 +84,7 @@ export class MotorHoja {
       void this.ponerPapel(this.papel);
       for (const [i, fuente] of this.fuentes) this.subirPagina(i, fuente);
       for (const [i, fuente] of this.fuentesMarcas) this.subirMarcas(i, fuente);
+      for (const [i, d] of [...this.detalles]) this.ponerDetalle(i, d.fuente, d.rect);
       this.pedirDibujo();
     });
     this.iniciar();
@@ -78,6 +99,7 @@ export class MotorHoja {
     this.gl = gl;
     this.texPaginas.clear();
     this.texMarcas.clear();
+    this.detalles.clear();
 
     const compilar = (tipo: number, fuente: string) => {
       const s = gl.createShader(tipo)!;
@@ -95,12 +117,16 @@ export class MotorHoja {
     this.prog = prog;
     gl.useProgram(prog);
     for (const nombre of ['uTam', 'uOrigen', 'uVista', 'uN', 'uA', 'uR', 'uDoblar', 'uZ', 'uPagina', 'uPapel', 'uTipo',
-      'uFondoNoche', 'uTintaNoche', 'uSombra', 'uDoblando', 'uLuz', 'uMarcas']) {
+      'uFondoNoche', 'uTintaNoche', 'uSombra', 'uDoblando', 'uLuz', 'uMarcas', 'uReverso', 'uMarcasReverso', 'uDetalle',
+      'uDetalleRect', 'uConDetalle', 'uDobleCara', 'uIzquierda', 'uDesplaza', 'uZoom', 'uPan']) {
       this.u[nombre] = gl.getUniformLocation(prog, nombre);
     }
     gl.uniform1i(this.u.uPagina, 0);
     gl.uniform1i(this.u.uPapel, 1);
     gl.uniform1i(this.u.uMarcas, 2);
+    gl.uniform1i(this.u.uReverso, 3);
+    gl.uniform1i(this.u.uMarcasReverso, 4);
+    gl.uniform1i(this.u.uDetalle, 5);
     gl.uniform3fv(this.u.uLuz, LUZ);
     gl.uniform3fv(this.u.uFondoNoche, hexRgb(PAPELES.noche.color));
     gl.uniform3fv(this.u.uTintaNoche, hexRgb(PAPELES.noche.tinta));
@@ -168,15 +194,46 @@ export class MotorHoja {
     this.pedirDibujo();
   }
 
-  /**
-   * Tamaño del lienzo (px CSS) y rectángulo de la hoja dentro de él. Con `recortarLomo`, lo que
-   * pasa del lomo hacia la izquierda no se dibuja (como en el celular, donde sale de la pantalla).
-   */
-  medir(w: number, h: number, dpr: number, hoja: Rect, recortarLomo = false) {
+  /** Tamaño del lienzo (px CSS) y rectángulo de la hoja (la página derecha, en doble página). */
+  medir(w: number, h: number, dpr: number, hoja: Rect, opciones: OpcionesVista = {}) {
     this.vista = { w, h, dpr };
     this.hojaRect = hoja;
-    this.recortarLomo = recortarLomo;
+    this.recortarLomo = !!opciones.recortarLomo;
+    this.doble = !!opciones.doble;
     this.ajustarLienzo();
+  }
+
+  /** Acercamiento: la pantalla muestra (x, y) + zoom · lienzo (px CSS, y hacia abajo). */
+  ponerZoom(z: number, x: number, y: number) {
+    this.zoom = { z, x, y };
+    this.pedirDibujo();
+  }
+
+  /**
+   * Trozo de una página dibujado con más resolución, para que el zoom se vea nítido.
+   * `rect` va en coordenadas de la página (0..1, y hacia arriba): x0, y0, x1, y1.
+   */
+  ponerDetalle(indice: number, fuente: TexImageSource | null, rect?: [number, number, number, number]) {
+    const gl = this.gl;
+    const previo = this.detalles.get(indice);
+    if (!fuente || !rect) {
+      if (previo && !this.perdido) gl.deleteTexture(previo.tex);
+      this.detalles.delete(indice);
+      this.pedirDibujo();
+      return;
+    }
+    if (this.perdido) return;
+    const tex = previo?.tex ?? this.crearTextura();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, fuente);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    this.detalles.set(indice, { tex, fuente, rect });
+    this.pedirDibujo();
+  }
+
+  quitarDetalles() {
+    for (const i of [...this.detalles.keys()]) this.ponerDetalle(i, null);
   }
 
   private ajustarLienzo() {
@@ -223,7 +280,12 @@ export class MotorHoja {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, fuente);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    if (indice === this.escena.hoja || indice === this.escena.debajo) this.pedirDibujo();
+    if (this.enEscena(indice)) this.pedirDibujo();
+  }
+
+  private enEscena(i: number) {
+    const e = this.escena;
+    return i === e.hoja || i === e.debajo || i === e.izquierda || i === e.reverso;
   }
 
   /** Marcas de una página (lienzo blanco con las marcas multiplicadas), o null si no tiene. */
@@ -246,7 +308,7 @@ export class MotorHoja {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, fuente);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     }
-    if (indice === this.escena.hoja || indice === this.escena.debajo) this.pedirDibujo();
+    if (this.enEscena(indice)) this.pedirDibujo();
   }
 
   tienePagina(indice: number) {
@@ -259,6 +321,7 @@ export class MotorHoja {
     this.texPaginas.delete(indice);
     this.fuentes.delete(indice);
     this.subirMarcas(indice, null);
+    if (this.detalles.has(indice)) this.ponerDetalle(indice, null);
   }
 
   soltarTodas() {
@@ -283,25 +346,29 @@ export class MotorHoja {
     const gl = this.gl;
     const { w, h } = this.vista;
     const r = this.hojaRect;
+    const { z, x: zx, y: zy } = this.zoom;
     gl.viewport(0, 0, this.lienzo.width, this.lienzo.height);
     gl.disable(gl.SCISSOR_TEST);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    if (this.recortarLomo) {
+    if (this.recortarLomo && !this.doble) {
       const escala = this.lienzo.width / w;
-      const x = Math.round(r.x * escala);
+      const x = Math.max(0, Math.round((zx + z * r.x) * escala));
       gl.enable(gl.SCISSOR_TEST);
-      gl.scissor(x, 0, this.lienzo.width - x, this.lienzo.height);
+      gl.scissor(x, 0, Math.max(0, this.lienzo.width - x), this.lienzo.height);
     }
     gl.useProgram(this.prog);
     gl.uniform2f(this.u.uTam, r.w, r.h);
     gl.uniform2f(this.u.uOrigen, r.x, h - r.y - r.h);
     gl.uniform2f(this.u.uVista, w, h);
+    gl.uniform1f(this.u.uZoom, z);
+    gl.uniform2f(this.u.uPan, zx, h - zy - z * h);
     gl.uniform1f(this.u.uTipo, TIPO_NUM[this.papel]);
+    gl.uniform1f(this.u.uDobleCara, this.doble ? 1 : 0);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.texPapel);
 
-    const { hoja, debajo, doblez, sombra } = this.escena;
+    const { hoja, debajo, doblez, sombra, izquierda = null, reverso = null } = this.escena;
     const dob = doblez ?? { nx: 1, ny: 0, a: 1e6, r: 0 };
     gl.uniform2f(this.u.uN, dob.nx, dob.ny);
     gl.uniform1f(this.u.uA, dob.a);
@@ -309,18 +376,31 @@ export class MotorHoja {
     gl.uniform1f(this.u.uSombra, sombra);
     gl.uniform1f(this.u.uDoblando, doblez ? 1 : 0);
 
-    const pintar = (indice: number | null, doblar: boolean, z: number) => {
-      gl.activeTexture(gl.TEXTURE2);
-      gl.bindTexture(gl.TEXTURE_2D, (indice !== null && this.texMarcas.get(indice)) || this.texBlanca);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, (indice !== null && this.texPaginas.get(indice)) || this.texBlanca);
-      gl.uniform1f(this.u.uDoblar, doblar ? 1 : 0);
-      gl.uniform1f(this.u.uZ, z);
+    const atar = (unidad: number, t: WebGLTexture | null | undefined) => {
+      gl.activeTexture(gl.TEXTURE0 + unidad);
+      gl.bindTexture(gl.TEXTURE_2D, t || this.texBlanca);
+    };
+    const pintar = (indice: number | null, o: { doblar: boolean; z: number; izquierda?: boolean; reverso?: number | null }) => {
+      const i = indice ?? -1;
+      atar(2, this.texMarcas.get(i));
+      atar(3, o.reverso != null ? this.texPaginas.get(o.reverso) : null);
+      atar(4, o.reverso != null ? this.texMarcas.get(o.reverso) : null);
+      // El detalle nítido solo va en páginas quietas (con la hoja en movimiento no se nota).
+      const det = !doblez ? this.detalles.get(i) : undefined;
+      atar(5, det?.tex);
+      gl.uniform1f(this.u.uConDetalle, det ? 1 : 0);
+      if (det) gl.uniform4fv(this.u.uDetalleRect, det.rect);
+      atar(0, this.texPaginas.get(i));
+      gl.uniform1f(this.u.uDoblar, o.doblar ? 1 : 0);
+      gl.uniform1f(this.u.uZ, o.z);
+      gl.uniform1f(this.u.uIzquierda, o.izquierda ? 1 : 0);
+      gl.uniform1f(this.u.uDesplaza, o.izquierda ? -r.w : 0);
       gl.drawElements(gl.TRIANGLES, this.nIndices, gl.UNSIGNED_SHORT, 0);
     };
-    // Primero la hoja de encima: así la GPU se salta lo que tapa de la página de abajo.
-    if (hoja !== null) pintar(hoja, true, 0);
-    if (doblez && debajo !== null) pintar(debajo, false, -1);
+    // Primero la hoja de encima: así la GPU se salta lo que tapa de las páginas de abajo.
+    if (hoja !== null) pintar(hoja, { doblar: true, z: 0, reverso: this.doble ? reverso : null });
+    if (doblez && debajo !== null) pintar(debajo, { doblar: false, z: -1 });
+    if (this.doble && izquierda !== null) pintar(izquierda, { doblar: false, z: -1, izquierda: true });
     if (doblez) this.medirRitmo();
   }
 

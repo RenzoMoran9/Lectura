@@ -33,7 +33,20 @@ function useVentana() {
   return v;
 }
 
-export function MenuEsquina({ alPapel, alFrases, alAbrir }: { alPapel: () => void; alFrases: () => void; alAbrir?: () => void }) {
+export function MenuEsquina({
+  alPapel,
+  alFrases,
+  alAbrir,
+  margenDerecho = 0,
+  margenAbajo = 0,
+}: {
+  alPapel: () => void;
+  alFrases: () => void;
+  alAbrir?: () => void;
+  /** Espacio que ocupa a la derecha el panel lateral, y abajo la barra de páginas. */
+  margenDerecho?: number;
+  margenAbajo?: number;
+}) {
   const { boton, colorResaltador, colorLapiz, poner } = useAjustes();
   const herramienta = useFrases((s) => s.herramienta);
   const usar = useFrases((s) => s.usar);
@@ -46,8 +59,8 @@ export function MenuEsquina({ alPapel, alFrases, alAbrir }: { alPapel: () => voi
   const seg = margenesSeguros();
   const margen = 14 + TAM / 2;
   const yMin = seg.arriba + 70;
-  const yMax = h - seg.abajo - margen;
-  const ax = arrastre?.x ?? (boton.lado === 'der' ? w - seg.derecha - margen : seg.izquierda + margen);
+  const yMax = h - seg.abajo - margen - margenAbajo;
+  const ax = arrastre?.x ?? (boton.lado === 'der' ? w - seg.derecha - margen - margenDerecho : seg.izquierda + margen);
   const ay = arrastre?.y ?? yMin + (yMax - yMin) * Math.max(0, Math.min(1, boton.y));
 
   const bajar = (e: React.PointerEvent) => {
