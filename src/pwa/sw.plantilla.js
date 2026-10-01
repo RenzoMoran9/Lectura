@@ -61,17 +61,18 @@ self.addEventListener('fetch', (e) => {
   if (url.href.startsWith(BASE + 'voces/')) return;
 
   // Archivos de la app: primero lo guardado; lo que no estaba (el libro de muestra) se guarda al usarlo.
+  // Llevan las mismas cabeceras que la página: los workers (PDF.js, las voces) se bloquean sin ellas.
   if (url.href.startsWith(BASE)) {
     e.respondWith(
       (async () => {
         const guardado = await caches.match(pedido);
-        if (guardado) return guardado;
+        if (guardado) return aislada(guardado);
         const r = await fetch(pedido);
         if (r.ok && r.status === 200 && r.type === 'basic') {
           const copia = r.clone();
           e.waitUntil(caches.open(CACHE_VARIOS).then((c) => c.put(pedido, copia)));
         }
-        return r;
+        return r.type === 'basic' ? aislada(r) : r;
       })(),
     );
     return;
