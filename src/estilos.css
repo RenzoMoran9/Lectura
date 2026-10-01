@@ -650,3 +650,25 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: 0; bo
 .voz-cerrar { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: rgba(245, 237, 219, .8); }
 .lector.con-voz .quitar-zoom { bottom: calc(var(--seguro-abajo) + 86px); }
 .lector.con-voz.en-mesa .quitar-zoom { bottom: 140px; }
+
+/* ---------- compartir una frase con marco ---------- */
+.velo-compartir { z-index: 75; }
+.compartir { padding-bottom: calc(var(--seguro-abajo) + 18px); }
+.compartir h3 { margin-bottom: 2px; }
+.compartir-sub { font: 500 13px "DM Sans"; color: var(--tinta-3); margin-bottom: 12px; }
+.compartir-vista { display: flex; justify-content: center; margin-bottom: 14px; }
+.compartir-vista canvas { height: min(46dvh, 440px); width: auto; aspect-ratio: 9 / 16; border-radius: 12px; box-shadow: 0 18px 30px -16px rgba(40, 20, 0, .55); background: #F5EDDB; }
+.marcos { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
+.marco { display: grid; justify-items: center; gap: 5px; font: 600 11.5px "DM Sans"; color: var(--tinta-2); padding: 0; }
+.marco img, .marco-vacio { display: block; width: 100%; max-width: 64px; aspect-ratio: 9 / 16; border-radius: 7px; box-shadow: 0 0 0 1px rgba(60, 40, 20, .14); background: #EDE3D0; }
+.marco.sel { color: var(--tinta); }
+.marco.sel img, .marco.sel .marco-vacio { box-shadow: 0 0 0 2.5px var(--tinta); }
+.compartir-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.compartir-botones button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; border-radius: 22px; padding: 13px 10px; font: 600 15px "DM Sans"; margin: 0; }
+.compartir-botones .guardar { border: 1.5px solid rgba(60, 40, 20, .25); color: var(--tinta); }
+.compartir-botones button:disabled { opacity: .5; }
+.compartir-aviso { font: 500 13px/1.4 "DM Sans"; color: var(--tinta-2); text-align: center; margin: 12px 0 0; }
+.repaso-enlaces { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+.repasar-botones .enlace-ir { color: #F5EDDB; }
+.acciones-frase { display: flex; gap: 8px; margin-top: 10px; }
+.tarjeta .ir { white-space: nowrap; }

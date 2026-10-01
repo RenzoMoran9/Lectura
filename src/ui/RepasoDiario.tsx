@@ -9,6 +9,7 @@ import type { Frase } from '../frases/modelo';
 import { responder, sumarRacha } from '../frases/repaso';
 import { Icono } from './Icono';
 import { cuando, TextoFrase } from './MisFrases';
+import { CompartirFrase } from './CompartirFrase';
 import { NotaFrase } from './NotaFrase';
 
 export function RepasoDiario({ frases, alCerrar, alIr }: { frases: Frase[]; alCerrar: () => void; alIr: (f: Frase) => void }) {
@@ -19,6 +20,7 @@ export function RepasoDiario({ frases, alCerrar, alIr }: { frases: Frase[]; alCe
   const libros = useLibros((s) => s.libros);
   const actualizar = useFrases((s) => s.actualizar);
   const racha = useAjustes((s) => s.racha);
+  const [compartir, setCompartir] = useState(false);
   const f = mazo[i];
 
   const responderCon = (recordaba: boolean) => {
@@ -61,11 +63,17 @@ export function RepasoDiario({ frases, alCerrar, alIr }: { frases: Frase[]; alCe
               La recordaba <Icono nombre="check" tam={16} grosor={2.4} />
             </button>
           </div>
-          {libros.some((l) => l.id === f.libroId) && (
-            <button className="enlace-ir" onClick={() => alIr(f)}>
-              Ir a la página <Icono nombre="arrow-right" tam={15} />
+          <div className="repaso-enlaces">
+            <button className="enlace-ir" onClick={() => setCompartir(true)}>
+              <Icono nombre="share" tam={15} /> Compartir
             </button>
-          )}
+            {libros.some((l) => l.id === f.libroId) && (
+              <button className="enlace-ir" onClick={() => alIr(f)}>
+                Ir a la página <Icono nombre="arrow-right" tam={15} />
+              </button>
+            )}
+          </div>
+          {compartir && <CompartirFrase f={f} alCerrar={() => setCompartir(false)} />}
           <p className="repasar-cuenta repaso-pie">
             Las que recuerdas vuelven cada vez más espaciadas{racha && racha.dias > 1 ? ` · racha: ${racha.dias} días` : ''}
           </p>

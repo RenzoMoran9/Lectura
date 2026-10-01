@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useFrases } from '../estado/frases';
 import type { Frase } from '../frases/modelo';
 import { Icono } from './Icono';
+import { CompartirFrase } from './CompartirFrase';
 import { cuando, Repasar, TextoFrase } from './MisFrases';
 import { NotaFrase } from './NotaFrase';
 
@@ -14,6 +15,7 @@ export function PanelFrases({ libroId, alIr, alCerrar }: { libroId: string; alIr
     [todas, libroId],
   );
   const [repasando, setRepasando] = useState(false);
+  const [compartirDe, setCompartirDe] = useState<Frase | null>(null);
   return (
     <aside className="panel-frases ui-claro" aria-label="Mis frases de este libro">
       <div className="panel-cab">
@@ -34,8 +36,18 @@ export function PanelFrases({ libroId, alIr, alCerrar }: { libroId: string; alIr
             </p>
             <NotaFrase f={f} editando={false} alTerminar={() => {}} />
             <div className="meta">
-              <span>
+              <span className="meta-izq">
                 Pág. {f.pagina + 1} · {cuando(f.creada)}
+                <button
+                  className="poner-nota"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCompartirDe(f);
+                  }}
+                  aria-label="Compartir frase"
+                >
+                  <Icono nombre="share" tam={12} />
+                </button>
               </span>
               <span className="ir">
                 Ir <Icono nombre="arrow-right" tam={14} />
@@ -49,6 +61,7 @@ export function PanelFrases({ libroId, alIr, alCerrar }: { libroId: string; alIr
           </button>
         )}
       </div>
+      {compartirDe && <CompartirFrase f={compartirDe} alCerrar={() => setCompartirDe(null)} />}
       {repasando && (
         <Repasar
           frases={frases}

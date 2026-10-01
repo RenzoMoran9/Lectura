@@ -45,9 +45,10 @@ La uso sobre todo desde el celular, y también desde la computadora.
 11. **Leer en voz alta.** Botón de audífonos arriba. Lee desde el marcador (o desde lo que se ve), ilumina la oración que lee y, al terminar la página, la hoja pasa sola con su sonido. Pausa, velocidad (0,8× a 1,5×) y voz en español del sistema. Si paso la hoja yo, sigue desde ahí.
 12. **Repaso del día, tipo tarjetas.** «Para recordar hoy» avisa cuántas frases tocan. Las que recuerdo vuelven en 3, 7, 14… días; las otras, mañana. Cuenta los días seguidos.
 13. **Nota en una frase** (corta, hasta 280 letras) y **exportar Mis frases** en un archivo de texto, agrupadas por libro.
+14. **Compartir una frase con marco.** Botón «Compartir» en cada frase (Mis frases, repasos y panel de la PC). Se elige entre 5 marcos (clásico, antiguo, noche, cuaderno y flor seca) y sale una imagen vertical para estados e historias (1080 × 1920), con la marca de la frase, el libro, el autor y la página. «Guardar imagen» la baja al teléfono; «Compartir» abre WhatsApp, Instagram o la app que elija.
 
 ## Lo que NO va (por ahora)
-Tienda de libros, botones de compartir, notas largas, conversión a EPUB y reacomodar el texto del PDF.
+Tienda de libros, notas largas, conversión a EPUB y reacomodar el texto del PDF.
 
 ## Diseño: propuesta visual v1
 La referencia está en `diseno/`:

@@ -111,6 +111,10 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   a mañana. Al terminar, los días seguidos que llevas.
 - **Nota en una frase** (`src/ui/NotaFrase.tsx`): «✎ Nota» en cada tarjeta de Mis frases (hasta 280 letras); se
   guarda al salir del cuadro o con Enter, y aparece también en el repaso y en el panel de la PC.
+- **Compartir con marco** (`src/frases/tarjeta.ts`, `src/ui/CompartirFrase.tsx`): «Compartir» en cada frase abre una
+  hoja con la vista previa y cinco marcos (clásico, antiguo, noche, cuaderno y flor seca). La imagen sale en formato
+  de estado (1080 × 1920), con la marca de la frase (resaltador o lápiz), el libro, el autor y la página; la letra se
+  achica sola si la frase es larga. «Guardar imagen» la baja; «Compartir» usa el menú del sistema (Web Share).
 - **Exportar** (`src/frases/exportar.ts`): descarga las frases que se ven (con el buscador y los filtros puestos) en
   un archivo `.txt`, agrupadas por libro y por página, con su color y su nota.
 
@@ -140,7 +144,7 @@ La maqueta es `diseno/propuesta-visual.html` (ábrela en el navegador). Para vol
 
 ## Licencias de terceros
 
-- Fuentes EB Garamond, Fraunces, DM Sans y Caveat (`diseno/fuentes/`): SIL Open Font License 1.1, vía Fontsource.
+- Fuentes EB Garamond, Fraunces, DM Sans y Caveat (`diseno/fuentes/`, `public/fuentes/`): SIL Open Font License 1.1, vía Fontsource.
 - Íconos de [Lucide](https://lucide.dev) (`diseno/iconos.js`, `src/ui/Icono.tsx`): licencia ISC. El ícono «encerrar» es propio.
 - Texto de muestra: *Don Quijote de la Mancha*, Miguel de Cervantes (1605), dominio público.
 - [PDF.js](https://github.com/mozilla/pdf.js) (`pdfjs-dist`): Apache-2.0. Sus recursos (mapas de caracteres,

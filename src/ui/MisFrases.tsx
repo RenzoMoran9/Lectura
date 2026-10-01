@@ -8,6 +8,7 @@ import { colorCss, lazoAlrededor } from '../frases/dibujo';
 import { COLORES_LAPIZ, COLORES_RESALTADOR, esLapiz, LAPICES, rgbDe, type ColorMarca, type Frase } from '../frases/modelo';
 import { descargar, textoParaExportar } from '../frases/exportar';
 import { Icono } from './Icono';
+import { CompartirFrase } from './CompartirFrase';
 import { NotaFrase } from './NotaFrase';
 import { Pestanas } from './Pestanas';
 
@@ -94,6 +95,7 @@ export function Repasar({ frases, alCerrar, alIr }: { frases: Frase[]; alCerrar:
   const [i, setI] = useState(0);
   const f = mazo[i];
   const libros = useLibros((s) => s.libros);
+  const [compartir, setCompartir] = useState(false);
   if (!f) return null;
   const titulo = libros.find((l) => l.id === f.libroId)?.titulo ?? f.libroTitulo ?? 'Libro';
   const otra = () => {
@@ -123,6 +125,9 @@ export function Repasar({ frases, alCerrar, alIr }: { frases: Frase[]; alCerrar:
           <button className="btn-tinta" onClick={otra}>
             <Icono nombre="shuffle" tam={16} /> Otra frase
           </button>
+          <button className="enlace-ir" onClick={() => setCompartir(true)}>
+            <Icono nombre="share" tam={15} /> Compartir
+          </button>
           {libros.some((l) => l.id === f.libroId) && (
             <button className="enlace-ir" onClick={() => alIr(f)}>
               Ir a la página <Icono nombre="arrow-right" tam={15} />
@@ -132,6 +137,7 @@ export function Repasar({ frases, alCerrar, alIr }: { frases: Frase[]; alCerrar:
         <div className="repasar-cuenta">
           {i + 1} de {mazo.length}
         </div>
+        {compartir && <CompartirFrase f={f} alCerrar={() => setCompartir(false)} />}
       </div>
     </div>
   );
@@ -146,6 +152,7 @@ export function MisFrases({ libroId }: { libroId?: string }) {
   const [verColores, setVerColores] = useState(false);
   const [repasando, setRepasando] = useState(false);
   const [notaDe, setNotaDe] = useState<string | null>(null);
+  const [compartirDe, setCompartirDe] = useState<Frase | null>(null);
 
   const tituloDe = (id: string, f?: Frase) => libros.find((l) => l.id === id)?.titulo ?? f?.libroTitulo ?? 'Libro';
   const enEstante = (id: string) => libros.some((l) => l.id === id);
@@ -272,19 +279,8 @@ export function MisFrases({ libroId }: { libroId?: string }) {
                       <NotaFrase f={f} editando={notaDe === f.id} alTerminar={() => setNotaDe(null)} />
                     </div>
                     <div className="meta">
-                      <span className="meta-izq">
+                      <span>
                         Pág. {f.pagina + 1} · {cuando(f.creada)}
-                        {!f.nota && notaDe !== f.id && (
-                          <button
-                            className="poner-nota"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNotaDe(f.id);
-                            }}
-                          >
-                            <Icono nombre="lapiz" tam={12} /> Nota
-                          </button>
-                        )}
                       </span>
                       {enEstante(f.libroId) ? (
                         <span className="ir">
@@ -293,6 +289,29 @@ export function MisFrases({ libroId }: { libroId?: string }) {
                       ) : (
                         <span className="fuera">El libro ya no está en el estante</span>
                       )}
+                    </div>
+                    <div className="acciones-frase">
+                      {!f.nota && notaDe !== f.id && (
+                        <button
+                          className="poner-nota"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNotaDe(f.id);
+                          }}
+                        >
+                          <Icono nombre="lapiz" tam={12} /> Nota
+                        </button>
+                      )}
+                      <button
+                        className="poner-nota"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCompartirDe(f);
+                        }}
+                        aria-label="Compartir frase"
+                      >
+                        <Icono nombre="share" tam={12} /> Compartir
+                      </button>
                     </div>
                   </article>
                 ))}
@@ -303,6 +322,7 @@ export function MisFrases({ libroId }: { libroId?: string }) {
       </div>
       <Pestanas actual="frases" />
       {repasando && <Repasar frases={filtradas} alCerrar={() => setRepasando(false)} alIr={ir} />}
+      {compartirDe && <CompartirFrase f={compartirDe} alCerrar={() => setCompartirDe(null)} />}
     </div>
   );
 }

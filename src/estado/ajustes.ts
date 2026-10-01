@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { ColorLapiz, ColorResaltador } from '../frases/modelo';
+import type { Marco } from '../frases/tarjeta';
 import type { TipoPapel } from '../hoja/papel';
 import type { JuegoSonido } from '../sonido/sonido';
 
@@ -25,6 +26,8 @@ export interface Ajustes {
   tibieza: number;
   /** Días seguidos haciendo el repaso del día. */
   racha?: { dia: string; dias: number };
+  /** El último marco elegido para compartir una frase. */
+  marco?: Marco;
   /** Lectura en voz alta: la voz elegida (nombre) y la velocidad. */
   voz?: string;
   velocidadVoz: number;
