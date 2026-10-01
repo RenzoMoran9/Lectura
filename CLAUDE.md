@@ -48,6 +48,7 @@ La uso sobre todo desde el celular, y también desde la computadora.
 12. **Repaso del día, tipo tarjetas.** «Para recordar hoy» avisa cuántas frases tocan. Las que recuerdo vuelven en 3, 7, 14… días; las otras, mañana. Cuenta los días seguidos.
 13. **Nota en una frase** (corta, hasta 280 letras) y **exportar Mis frases** en un archivo de texto, agrupadas por libro.
 14. **Compartir una frase con marco.** Botón «Compartir» en cada frase (Mis frases, repasos y panel de la PC). Se elige entre 5 marcos (clásico, antiguo, noche, cuaderno y flor seca) y sale una imagen vertical para estados e historias (1080 × 1920), solo con el texto de la frase bien escrito (sin el resaltador ni el lápiz) y el nombre del libro (sin página ni autor). «Borrar palabras»: toco o arrastro sobre las que sobran y queda así también en Mis frases. Si el menú de compartir no se abre, aparece la imagen grande para guardarla o compartirla con el dedo. «Guardar imagen» la baja al teléfono; «Compartir» abre WhatsApp, Instagram o la app que elija.
+15. **Lupa.** Botón arriba (junto a los audífonos). Una lupa redonda con mango que llevo con el dedo sobre la hoja mientras leo; aumenta 1,5×, 2×, 2,5× o 3× y lo de adentro se dibuja nítido del PDF (no es la página estirada), con el papel, las marcas y el modo noche. Fuera de la lupa, el dedo sigue pasando las hojas. Recuerda dónde la dejé y cuánto aumenta.
 
 ## Lo que NO va (por ahora)
 Tienda de libros, notas largas, conversión a EPUB y reacomodar el texto del PDF.
@@ -133,7 +134,7 @@ Pantallas:
 - **Gestos:**
   - En modo lectura, el dedo pasa las hojas.
   - En modo resaltar, encerrar o recuadro, el dedo marca y la hoja no se pasa (aviso arriba con «Listo» para salir).
-  - Se pellizca para acercar. Con zoom, arriba y abajo mueve la página y a los lados la pasa (cuando ya se ve el borde del texto); el zoom se mantiene en la página siguiente.
+  - Se pellizca para acercar. Con zoom, arriba y abajo mueve la página y a los lados la pasa (cuando ya se ve el borde del texto); el zoom se mantiene en la página siguiente. Con zoom, lo visible se vuelve a dibujar con la densidad real de la pantalla (hasta 3×), para que el texto no se vea estirado.
   - Doble toque: el texto a todo el ancho de la pantalla (se recortan los márgenes blancos, sin cortar el texto) o vuelve a la página entera. Un pellizco que queda cerca de ese ancho se acomoda justo en él.
   - Celular de lado: la página va a todo el ancho y se lee deslizando hacia abajo.
   - Dedo quieto medio segundo (en modo lectura): pone el marcador en esa línea; sobre el marcador, lo quita.

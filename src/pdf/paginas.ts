@@ -210,19 +210,22 @@ export class Paginas {
     ctx.restore();
   }
 
-  private detalleEnCurso: { cancel: () => void } | null = null;
+  /** Lo que se está dibujando con detalle, uno por uso (el zoom y la lupa no se cancelan entre sí). */
+  private detallesEnCurso = new Map<string, { cancel: () => void }>();
 
   /**
-   * Con zoom: dibuja solo el trozo visible de la página (`region`, px CSS de la hoja) con `k` píxeles
-   * por px CSS, para que el texto se vea nítido. Devuelve el lienzo y dónde va (uv, y hacia arriba).
+   * Con zoom (o en la lupa): dibuja solo un trozo de la página (`region`, px CSS de la hoja) con
+   * `k` píxeles por px CSS, para que el texto se vea nítido. Devuelve el lienzo y dónde va (uv, y
+   * hacia arriba). Un pedido nuevo del mismo `uso` cancela el anterior.
    */
   async dibujarDetalle(
     indice: number,
     region: { x: number; y: number; w: number; h: number },
     k: number,
+    uso = 'zoom',
   ): Promise<{ lienzo: HTMLCanvasElement; rect: [number, number, number, number] } | null> {
-    this.detalleEnCurso?.cancel();
-    this.detalleEnCurso = null;
+    this.detallesEnCurso.get(uso)?.cancel();
+    this.detallesEnCurso.delete(uso);
     const m = this.maqueta;
     const ub = this.ubicaciones.get(indice);
     const baseLienzo = this.listas.get(indice);
@@ -245,18 +248,18 @@ export class Paginas {
       const pagina = await this.doc.getPage(indice + 1);
       const vista = pagina.getViewport({ scale: ub.escala * k });
       const tarea = pagina.render({ canvas: lienzo, viewport: vista, transform: [1, 0, 0, 1, px, py], background: 'rgba(0,0,0,0)' });
-      this.detalleEnCurso = {
+      this.detallesEnCurso.set(uso, {
         cancel: () => {
           cancelado = true;
           tarea.cancel();
         },
-      };
+      });
       await tarea.promise;
     } catch {
       return null;
     }
     if (cancelado) return null;
-    this.detalleEnCurso = null;
+    this.detallesEnCurso.delete(uso);
     const u0 = region.x / m.ancho;
     const u1 = (region.x + region.w) / m.ancho;
     const v0 = 1 - (region.y + region.h) / m.alto;
@@ -266,7 +269,8 @@ export class Paginas {
 
   destruir() {
     this.enCurso?.cancelar();
-    this.detalleEnCurso?.cancel();
+    for (const t of this.detallesEnCurso.values()) t.cancel();
+    this.detallesEnCurso.clear();
     this.listas.clear();
   }
 }

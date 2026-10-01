@@ -2,7 +2,7 @@
 // recuerdo de la página. En el celular, una página a la vez; en pantallas anchas, el libro abierto
 // a doble página sobre la mesa, con barras fijas y el panel de Mis frases.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { leerArchivo } from '../datos/archivos';
 import { guardarAvance, leerAvance, obtenerLibro, type Avance, type Libro } from '../datos/bd';
 import { useAjustes } from '../estado/ajustes';
@@ -41,6 +41,7 @@ import { ambiente } from '../sonido/ambiente';
 import { sonido } from '../sonido/sonido';
 import { AvisoBreve, AvisoModo, type Mensaje } from './Avisos';
 import { CompartirFrase } from './CompartirFrase';
+import { Lupa, type FuenteLupa } from './Lupa';
 import { Icono } from './Icono';
 import { BuscarLibro, type Resultado } from './BuscarLibro';
 import { Indice } from './Indice';
@@ -77,6 +78,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const verFrases = useLibros((s) => s.verFrases);
   const anotarAvance = useLibros((s) => s.anotarAvance);
   const papel = useAjustes((s) => s.papel);
+  const lupaActiva = useAjustes((s) => !!s.lupa?.activa);
   const panelFrases = useAjustes((s) => s.panelFrases);
   const herramienta = useFrases((s) => s.herramienta);
 
@@ -255,6 +257,40 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   // ---------- Zoom ----------
   // El tamaño del lector se mide al acomodar la hoja (así no se lee del DOM en cada cuadro).
   const vistaMedida = useRef<{ w: number; h: number } | null>(null);
+
+  // Lo que la lupa necesita del lector: qué página hay bajo un punto, la hoja dibujada, un trozo nítido…
+  const libroIdRef = useRef<string | undefined>(undefined);
+  libroIdRef.current = libro?.id;
+  const fuenteLupa = useMemo<FuenteLupa>(
+    () => ({
+      bajo: (x, y) => {
+        const d = dispRef.current;
+        if (!d) return null;
+        const z = zoomRef.current;
+        const c = aLienzo(z, x, y);
+        let indice = paginaRef.current;
+        let r = d.hoja;
+        if (d.modo === 'doble') {
+          const { izquierda, derecha } = pliego(paginaRef.current);
+          if (c.x < d.hoja.x) {
+            indice = izquierda;
+            r = { ...d.hoja, x: d.hoja.x - d.hoja.w };
+          } else indice = derecha;
+        }
+        if (indice < 0 || indice >= totalRef.current) return null;
+        return { indice, hx: c.x - r.x, hy: c.y - r.y, zoom: z.z, hoja: { w: d.hoja.w, h: d.hoja.h } };
+      },
+      base: (i) => {
+        const l = paginas.current?.obtener(i);
+        const t = paginas.current?.lienzoTam;
+        return l && t ? { lienzo: l, dpr: t.dpr } : null;
+      },
+      detalle: async (i, region, k) => (await paginas.current?.dibujarDetalle(i, region, k, 'lupa'))?.lienzo ?? null,
+      ubicacion: (i) => paginas.current?.ubicacion(i),
+      frases: (i) => useFrases.getState().frases.filter((f) => f.libroId === libroIdRef.current && f.pagina === i),
+    }),
+    [],
+  );
   const vistaTam = () => {
     if (vistaMedida.current) return vistaMedida.current;
     const el = contenedor.current;
@@ -345,10 +381,15 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     setHayZoom(conZoom(z));
   }, []);
 
-  /** Las páginas se dibujan a la medida de la pantalla; con zoom (o de lado) hace falta más detalle. */
+  /**
+   * Las páginas se dibujan a la medida de la pantalla; con zoom (o de lado) hace falta más detalle.
+   * Se usa la densidad real de la pantalla (hasta 3): con 2,5 los celulares de pantalla muy fina
+   * veían el texto estirado (algo borroso) con poco zoom.
+   */
+  const densidadPantalla = () => Math.min(window.devicePixelRatio || 1, 3);
   const necesitaDetalle = (z: Zoom) => {
     const tam = paginas.current?.lienzoTam;
-    return !!tam && tam.dpr < Math.min(window.devicePixelRatio || 1, 2.5) * z.z * 0.95;
+    return !!tam && tam.dpr < densidadPantalla() * z.z * 0.97;
   };
 
   const pintarDetalle = useCallback(() => {
@@ -363,7 +404,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     if (!tam) return;
     const vw = el.clientWidth;
     const vh = el.clientHeight;
-    const k = Math.min(window.devicePixelRatio || 1, 2.5) * z.z;
+    const k = densidadPantalla() * z.z;
     // Lo visible y un poco más arriba y abajo: al deslizar un poco, sigue nítido.
     const extra = (0.35 * vh) / z.z;
     for (const i of visibles()) {
@@ -1027,7 +1068,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       // Las páginas se dibujan a la medida de la hoja (de lado es más alta que la pantalla: menos
       // densidad, y el detalle nítido se agrega encima); el lienzo, siempre a la de la pantalla.
       const dpr = densidad(window.devicePixelRatio, d.hoja.w, d.hoja.h);
-      const dprLienzo = densidad(window.devicePixelRatio, w, h);
+      // El lienzo de la pantalla, con toda su densidad también en los celulares grandes.
+      const dprLienzo = densidad(window.devicePixelRatio, w, h, 4.4e6);
       const cambioModo = dispRef.current?.modo !== d.modo;
       dispRef.current = d;
       setDisp(d);
@@ -1683,6 +1725,9 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         <div ref={capaVoz} className={`capa-voz ${voz?.fase === 'pausa' ? 'en-pausa' : ''}`} aria-hidden="true">
           {voz?.rangos.map((_, k) => <div key={k} className="voz-frase" style={{ display: 'none' }} />)}
         </div>
+        {lupaActiva && disp && vistaMedida.current && (
+          <Lupa fuente={fuenteLupa} oculta={pasando} ancho={vistaMedida.current.w} alto={vistaMedida.current.h} />
+        )}
         {/* Luz del papel: de noche, más cálida y tenue (como bajo una lámpara). */}
         <div className="luz-papel" style={{ opacity: luz.tibieza * 0.34 }} aria-hidden="true" />
         <div className="luz-tenue" style={{ opacity: (1 - luz.brillo) * 0.9 }} aria-hidden="true" />
@@ -1711,6 +1756,18 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           title="Leer en voz alta"
         >
           <Icono nombre="audifonos" tam={19} />
+        </button>
+        <button
+          className={`icono-barra ${lupaActiva ? 'on' : ''}`}
+          onClick={() => {
+            const g = useAjustes.getState().lupa;
+            useAjustes.getState().poner({ lupa: { x: g?.x ?? 0.5, y: g?.y ?? 0.55, aumento: g?.aumento ?? 2, activa: !lupaActiva } });
+          }}
+          aria-label={lupaActiva ? 'Quitar la lupa' : 'Lupa'}
+          aria-pressed={lupaActiva}
+          title="Lupa"
+        >
+          <Icono nombre="zoom-in" tam={19} />
         </button>
         <button className="icono-barra" onClick={() => setBuscarAbierto(true)} aria-label="Buscar en el libro" title="Buscar en el libro">
           <Icono nombre="search" tam={19} />

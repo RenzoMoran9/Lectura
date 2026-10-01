@@ -39,6 +39,8 @@ export interface Ajustes {
   portadasEnLinea: boolean;
   /** Ya no mostrar el aviso de cómo instalar la app en el iPhone. */
   sinAvisoInstalar: boolean;
+  /** La lupa: si está puesta, dónde (centro, en fracción de la pantalla) y cuánto aumenta. */
+  lupa?: { activa: boolean; x: number; y: number; aumento: number };
   poner: (cambios: Partial<Omit<Ajustes, 'poner'>>) => void;
 }
 
