@@ -40,7 +40,7 @@ La uso sobre todo desde el celular, y también desde la computadora.
    - También la altura en la página (con zoom o de lado).
    - Marcador: dejo el dedo quieto medio segundo sobre la línea y queda una cinta roja en el borde y una raya de lápiz rojo desde esa palabra. Al volver a abrir, esa línea brilla y dice «Aquí te quedaste».
    - Si voy a ver una frase, el índice u otra página, mi lugar no se pierde: aparece «Volver a la pág. … · donde ibas». Si sigo leyendo desde ahí (dos hojas), ese pasa a ser mi lugar.
-8. **Índice y cuánto falta.** El índice del PDF (si lo trae) con el marcador arriba, los capítulos leídos marcados y el actual con su avance. Abajo, el tiempo que me falta para terminar el capítulo y el libro, según mi ritmo de lectura.
+8. **Índice y cuánto falta.** El índice del PDF (si no lo trae, la app lo arma una vez buscando los títulos en el texto: letra más grande, «Capítulo…», «Prólogo»…) con el marcador arriba, los capítulos leídos marcados y el actual con su avance. Abajo, el tiempo que me falta para terminar el capítulo y el libro, según mi ritmo de lectura.
 9. **La pantalla no se apaga** mientras leo (sí, si nadie la toca en 10 minutos).
 10. **Buscar en el libro** una palabra o frase, sin importar tildes ni mayúsculas: resultados con página, capítulo y fragmento; al tocar uno, la palabra brilla y puedo volver a donde iba.
 11. **Leer en voz alta.** Botón de audífonos arriba. Lee desde el marcador (o desde lo que se ve), ilumina la oración que lee y, al terminar la página, la hoja pasa sola con su sonido. Pausa, velocidad (0,8× a 1,5×) y voz. Si paso la hoja yo, sigue desde ahí.

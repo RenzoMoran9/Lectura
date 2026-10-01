@@ -712,3 +712,7 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: 0; bo
 .repasar-botones .enlace-ir { color: #F5EDDB; }
 .acciones-frase { display: flex; gap: 8px; margin-top: 10px; }
 .tarjeta .ir { white-space: nowrap; }
+.indice-armado { font: italic 400 13px/1.4 "Fraunces"; color: var(--tinta-3); margin: -4px 0 12px; }
+.indice-armando p { margin: 0 0 10px; }
+.indice-armando .barrita { display: block; height: 4px; border-radius: 2px; background: rgba(60, 40, 20, .12); overflow: hidden; }
+.indice-armando .barrita i { display: block; height: 100%; background: var(--tinta); border-radius: 2px; transition: width .3s; }

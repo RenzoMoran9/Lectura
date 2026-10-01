@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { leerArchivo } from '../datos/archivos';
-import { guardarAvance, leerAvance, obtenerLibro, type Avance, type Libro } from '../datos/bd';
+import { guardarAvance, guardarLibro, leerAvance, obtenerLibro, type Avance, type Libro } from '../datos/bd';
 import { useAjustes } from '../estado/ajustes';
 import { useFrases } from '../estado/frases';
 import { useLibros } from '../estado/libros';
@@ -30,6 +30,7 @@ import { MotorHoja, type Escena } from '../hoja/motor';
 import { Pasador, type Pase } from '../hoja/pasador';
 import { acercarEn, aLienzo, conZoom, desplazable, encuadrar, limitar, SIN_ZOOM, zoomAlTexto, type Encuadre, type Zoom } from '../hoja/zoom';
 import { capituloDe, leerCapitulos, type Capitulo } from '../pdf/indice';
+import { armarIndiceDoc } from '../pdf/indiceArmado';
 import type { TipoTrazo } from '../sonido/sonido';
 import { coincidencias } from '../lectura/buscar';
 import { luzActual } from '../lectura/luz';
@@ -101,6 +102,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const [recuadro, setRecuadro] = useState<{ arriba: number; abajo: number } | null>(null);
   const [hayZoom, setHayZoom] = useState(false);
   const [capitulos, setCapitulos] = useState<Capitulo[]>([]);
+  /** De dónde sale el índice: del PDF, armado por la app (o armándose), o no hay. */
+  const [origenIndice, setOrigenIndice] = useState<{ tipo: 'pdf' | 'armado' | 'armando' | 'ninguno'; avance?: number }>({ tipo: 'pdf' });
   const [ajuste, setAjuste] = useState<Ajuste>(() => (useAjustes.getState().ajusteTexto ? 'texto' : 'pagina'));
   /** Fui a otra parte del libro (una frase, el índice, la barra): aquí iba, para volver. */
   const [regreso, setRegreso] = useState<{ pagina: number; cy?: number } | null>(null);
@@ -204,8 +207,32 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       setPagina(inicial);
       void leerCapitulos(d).then((c) => {
         if (!vivo) return;
-        capitulosRef.current = c;
-        setCapitulos(c);
+        const poner = (lista: Capitulo[], tipo: 'pdf' | 'armado' | 'ninguno') => {
+          capitulosRef.current = lista;
+          setCapitulos(lista);
+          setOrigenIndice({ tipo });
+        };
+        if (c.length) return poner(c, 'pdf');
+        if (l.indiceArmado) return poner(l.indiceArmado, l.indiceArmado.length ? 'armado' : 'ninguno');
+        // El PDF no trae índice: se arma una vez, en segundo plano, buscando los títulos en el
+        // texto. Con otra copia del documento, para no llenar la memoria del que se está leyendo.
+        setOrigenIndice({ tipo: 'armando', avance: 0 });
+        window.setTimeout(async () => {
+          if (!vivo) return;
+          const otro = await abrirPdf(archivo).catch(() => null);
+          if (!otro) return vivo && setOrigenIndice({ tipo: 'ninguno' });
+          try {
+            const lista = await armarIndiceDoc(otro, { alAvanzar: (f) => vivo && setOrigenIndice({ tipo: 'armando', avance: f }), seguir: () => vivo });
+            if (!lista) return;
+            const actual = await obtenerLibro(l.id);
+            if (actual) await guardarLibro({ ...actual, indiceArmado: lista });
+            if (vivo) poner(lista, lista.length ? 'armado' : 'ninguno');
+          } catch {
+            if (vivo) setOrigenIndice({ tipo: 'ninguno' });
+          } finally {
+            cerrarPdf(otro);
+          }
+        }, 2500);
       });
     })().catch((e) => vivo && setError(e instanceof Error ? e.message : 'No se pudo abrir el libro.'));
     return () => {
@@ -1902,6 +1929,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       {indiceAbierto && (
         <Indice
           capitulos={capitulos}
+          origen={origenIndice}
           pagina={pagina ?? 0}
           total={total}
           marcador={marcaLectura}

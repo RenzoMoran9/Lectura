@@ -8,6 +8,8 @@ import { Icono } from './Icono';
 
 interface Props {
   capitulos: Capitulo[];
+  /** Del PDF, armado por la app con los títulos del texto (o armándose), o no hay. */
+  origen?: { tipo: 'pdf' | 'armado' | 'armando' | 'ninguno'; avance?: number };
   pagina: number;
   total: number;
   marcador?: MarcaLectura;
@@ -17,7 +19,7 @@ interface Props {
   alCerrar: () => void;
 }
 
-export function Indice({ capitulos, pagina, total, marcador, ritmo, alIr, alMarcador, alCerrar }: Props) {
+export function Indice({ capitulos, origen, pagina, total, marcador, ritmo, alIr, alMarcador, alCerrar }: Props) {
   const actualRef = useRef<HTMLButtonElement>(null);
   const f = falta(ritmo, capitulos, pagina, total);
   const cap = limitesCapitulo(capitulos, pagina, total);
@@ -41,6 +43,10 @@ export function Indice({ capitulos, pagina, total, marcador, ritmo, alIr, alMarc
           )}
         </div>
 
+        {origen?.tipo === 'armado' && capitulos.length > 0 && (
+          <p className="indice-armado">Este PDF no traía índice: lo armé con los títulos que encontré en el libro.</p>
+        )}
+
         {marcador && (
           <button className="aqui-quedaste" onClick={alMarcador}>
             <span className="cinta-chica" aria-hidden="true" />
@@ -49,8 +55,18 @@ export function Indice({ capitulos, pagina, total, marcador, ritmo, alIr, alMarc
           </button>
         )}
 
-        {capitulos.length === 0 ? (
-          <p className="nota">Este PDF no trae índice. Puedes saltar de página con la barra de abajo (toca la hoja para verla).</p>
+        {capitulos.length === 0 && origen?.tipo === 'armando' ? (
+          <div className="nota indice-armando">
+            <p>Este PDF no trae índice: estoy buscando los capítulos en el libro…</p>
+            <span className="barrita">
+              <i style={{ width: `${Math.max(3, Math.round((origen.avance ?? 0) * 100))}%` }} />
+            </span>
+          </div>
+        ) : capitulos.length === 0 ? (
+          <p className="nota">
+            Este PDF no trae índice y no encontré títulos de capítulos en su texto (puede ser un PDF escaneado). Puedes saltar de página con la barra de
+            abajo (toca la hoja para verla).
+          </p>
         ) : (
           <div className="capitulos">
             {capitulos.map((c, i) => {

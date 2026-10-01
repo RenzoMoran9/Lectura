@@ -3,6 +3,7 @@
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Frase } from '../frases/modelo';
+import type { Capitulo } from '../pdf/indice';
 import type { MarcaLectura, Ritmo } from '../lectura/lugar';
 import type { TipoAmbiente } from '../sonido/ambiente';
 
@@ -32,6 +33,8 @@ export interface Libro {
   ambiente?: TipoAmbiente;
   /** Ya se buscó su portada en internet (o la eligió el usuario): no se vuelve a buscar sola. */
   portadaBuscada?: boolean;
+  /** Si el PDF no trae índice: el que armó la app con los títulos que encontró (vacío: no halló ninguno). */
+  indiceArmado?: Capitulo[];
 }
 
 export interface Avance {

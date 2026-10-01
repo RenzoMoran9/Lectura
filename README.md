@@ -96,6 +96,10 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   barra ya no cambia tu lugar; aparece «Volver a la pág. … · donde ibas». Si sigues leyendo desde ahí, ese pasa a ser
   tu lugar. También se recuerda la altura en la página (con zoom o de lado).
 - **Índice** (botón arriba, al tocar la hoja): los capítulos del PDF, los leídos con ✓ y el actual con su avance.
+  Si el PDF no trae índice, la app lo arma una vez (`src/pdf/indiceArmado.ts`): recorre el texto de todas las páginas
+  en segundo plano, con otra copia del documento, y toma los renglones cortos con letra bastante más grande que la del
+  cuerpo o que empiezan con «Capítulo», «Parte», «Prólogo»…; los que se repiten en cada hoja no cuentan. Se guarda
+  con el libro (`indiceArmado`).
 - **Cuánto falta**: la app mide tu ritmo (segundos por página, sin contar saltos ni pausas largas) y dice cuánto te
   falta para terminar el capítulo y el libro; las rayitas de la barra de abajo son los capítulos.
 - **Pantalla encendida** mientras lees (Wake Lock); si nadie la toca en 10 minutos, se deja apagar.
