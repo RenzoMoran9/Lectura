@@ -48,7 +48,6 @@ La uso sobre todo desde el celular, y también desde la computadora.
 12. **Repaso del día, tipo tarjetas.** «Para recordar hoy» avisa cuántas frases tocan. Las que recuerdo vuelven en 3, 7, 14… días; las otras, mañana. Cuenta los días seguidos.
 13. **Nota en una frase** (corta, hasta 280 letras) y **exportar Mis frases** en un archivo de texto, agrupadas por libro.
 14. **Compartir una frase con marco.** Botón «Compartir» en cada frase (Mis frases, repasos y panel de la PC). Se elige entre 5 marcos (clásico, antiguo, noche, cuaderno y flor seca) y sale una imagen vertical para estados e historias (1080 × 1920), solo con el texto de la frase bien escrito (sin el resaltador ni el lápiz) y el nombre del libro (sin página ni autor). «Borrar palabras»: toco o arrastro sobre las que sobran y queda así también en Mis frases. Si el menú de compartir no se abre, aparece la imagen grande para guardarla o compartirla con el dedo. «Guardar imagen» la baja al teléfono; «Compartir» abre WhatsApp, Instagram o la app que elija.
-15. **Lupa.** Botón arriba (junto a los audífonos). Una lupa redonda con mango que llevo con el dedo sobre la hoja mientras leo; aumenta 1,5×, 2×, 2,5× o 3× y lo de adentro se dibuja nítido del PDF (no es la página estirada), con el papel, las marcas y el modo noche. Fuera de la lupa, el dedo sigue pasando las hojas. Recuerda dónde la dejé y cuánto aumenta.
 
 ## Lo que NO va (por ahora)
 Tienda de libros, notas largas, conversión a EPUB y reacomodar el texto del PDF.

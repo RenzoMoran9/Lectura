@@ -75,12 +75,6 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   Con zoom, lo visible se vuelve a dibujar con la densidad real de la pantalla (hasta 3×; antes se cortaba en 2,5× y
   en las pantallas muy finas el texto se veía algo estirado). **Pasar con un gesto**: además de arrastrarla, la hoja
   pasa si se lanza con un gesto rápido.
-- **Lupa** (`src/ui/Lupa.tsx`): botón arriba. Una lupa redonda con mango (dibujada con CSS, sin imágenes) que se
-  arrastra por el vidrio o por el mango; el mango se pone hacia donde hay lugar. Aumenta 1,5×, 2×, 2,5× o 3×. Lo de
-  adentro sale de la hoja ya dibujada y, al quedarse quieta un momento, de una franja nítida que PDF.js dibuja solo
-  para la lupa (`dibujarDetalle(…, 'lupa')`, hasta 6 millones de píxeles). Encima van las marcas y el papel: se
-  multiplica en los claros y de noche se invierte con el tono cálido. Fuera de la lupa el dedo sigue pasando hojas;
-  mientras la hoja pasa, la lupa se esconde. Se guardan la posición y el aumento.
   **Celular de lado**: la página va a todo el ancho y se lee deslizando. En la PC, Ctrl + rueda (hacia el puntero),
   la rueda sola mueve, y Ctrl + / − / 0. Al quedarse quieto, lo visible se vuelve a dibujar nítido.
 - **Sonido de fondo** (`src/sonido/ambiente.ts`): en «Papel y sonido», para relajarse (playa, bosque y fogata, lluvia)

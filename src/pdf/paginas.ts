@@ -210,11 +210,11 @@ export class Paginas {
     ctx.restore();
   }
 
-  /** Lo que se está dibujando con detalle, uno por uso (el zoom y la lupa no se cancelan entre sí). */
+  /** Lo que se está dibujando con detalle, uno por uso (un uso no cancela lo que pidió otro). */
   private detallesEnCurso = new Map<string, { cancel: () => void }>();
 
   /**
-   * Con zoom (o en la lupa): dibuja solo un trozo de la página (`region`, px CSS de la hoja) con
+   * Con zoom: dibuja solo un trozo de la página (`region`, px CSS de la hoja) con
    * `k` píxeles por px CSS, para que el texto se vea nítido. Devuelve el lienzo y dónde va (uv, y
    * hacia arriba). Un pedido nuevo del mismo `uso` cancela el anterior.
    */
