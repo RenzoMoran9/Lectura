@@ -1,5 +1,5 @@
-// Cómo se ven las marcas: resaltador con bordes irregulares de marcador, lápiz con temblor y las
-// cuatro esquinas a lápiz del recuadro.
+// Cómo se ven las marcas: resaltador con bordes irregulares de marcador, lápiz con temblor y el
+// cuadro a lápiz del recuadro.
 // Se dibujan en un lienzo blanco con «multiply», que luego se multiplica con la página en WebGL
 // (y también sirven para la vista previa mientras el dedo marca).
 
@@ -120,31 +120,40 @@ function bandaResaltador(ctx: CanvasRenderingContext2D, trazo: Punto[], grosor: 
 }
 
 /**
- * Las cuatro esquinas de un recuadro, a lápiz: cada una es una «L» hecha de un solo trazo, que se
- * pasa un poquito de la esquina, como cuando uno marca un párrafo en el margen.
+ * Los cuatro lados de un cuadro hecho a mano: cada uno es un trazo apenas curvo que se pasa un
+ * poquito de las esquinas (como cuando uno encuadra un párrafo con lápiz). `px` es un píxel CSS.
  */
-export function esquinasLapiz(ctx: CanvasRenderingContext2D, caja: Rect, hex: string, u: Ubicacion, rnd: () => number) {
-  const [x, y, w, h] = caja;
-  const px = 1 / u.escala; // un píxel CSS, en unidades de la página
-  const brazo = Math.min(24 * px, 0.34 * Math.min(w, h));
-  const esquinas: [number, number, number, number][] = [
-    [x, y, 1, 1],
-    [x + w, y, -1, 1],
-    [x + w, y + h, -1, -1],
-    [x, y + h, 1, -1],
+export function ladosCuadro(x0: number, y0: number, x1: number, y1: number, px: number, rnd: () => number): Punto[][] {
+  const j = () => (rnd() - 0.5) * 1.6 * px;
+  const pasa = () => (1.2 + rnd() * 3) * px;
+  const mx = (x0 + x1) / 2;
+  const my = (y0 + y1) / 2;
+  return [
+    [[x0 - pasa(), y0 + j()], [mx, y0 + j() * 0.6], [x1 + pasa(), y0 + j()]],
+    [[x1 + j(), y0 - pasa()], [x1 + j() * 0.6, my], [x1 + j(), y1 + pasa()]],
+    [[x1 + pasa(), y1 + j()], [mx, y1 + j() * 0.6], [x0 - pasa(), y1 + j()]],
+    [[x0 + j(), y1 + pasa()], [x0 + j() * 0.6, my], [x0 + j(), y0 - pasa()]],
   ];
-  for (const [ex, ey, sx, sy] of esquinas) {
-    const pasa = (0.6 + rnd() * 1.6) * px;
-    const torcido = (rnd() - 0.5) * 1.2 * px;
-    const pts: Punto[] = [];
-    const n = 4;
-    for (let i = 0; i <= n; i++) pts.push([ex + sx * brazo * (1 - i / n) - (i === n ? sx * pasa : 0), ey + (torcido * (n - i)) / n]);
-    for (let i = 1; i <= n; i++) pts.push([ex + (torcido * i) / n, ey + sy * brazo * (i / n)]);
-    trazoLapiz(ctx, pts, hex, u, rnd);
-  }
 }
 
-/** El recuadro mientras se arrastra: lo de afuera más oscuro, el borde y una asa en cada esquina. */
+/** El cuadro de un recuadro, a lápiz y completo. */
+export function cuadroLapiz(ctx: CanvasRenderingContext2D, [x, y, w, h]: Rect, hex: string, u: Ubicacion, rnd: () => number) {
+  for (const lado of ladosCuadro(x, y, x + w, y + h, 1 / u.escala, rnd)) trazoLapiz(ctx, lado, hex, u, rnd);
+}
+
+/** El mismo cuadro como camino SVG (para las tarjetas de Mis frases), en px. */
+export function cuadroAMano(w: number, h: number, semilla: string): string {
+  const rnd = azar(semilla);
+  const r = (n: number) => Math.round(n * 10) / 10;
+  return ladosCuadro(1.5, 1.5, w - 1.5, h - 1.5, 1, rnd)
+    .map(([a, m, b]) => `M${r(a[0])} ${r(a[1])} Q${r(m[0])} ${r(m[1])} ${r(b[0])} ${r(b[1])}`)
+    .join(' ');
+}
+
+/**
+ * El recuadro mientras se arrastra o se ajusta: lo de afuera más oscuro, el borde y una asa en
+ * cada esquina (para moverla).
+ */
 export function recuadroEnCurso(ctx: CanvasRenderingContext2D, caja: Rect, u: Ubicacion, renglones: number | undefined, oscuro: boolean) {
   const [cx, cy, cw, ch] = caja;
   const x0 = (u.x + cx * u.escala) * u.dpr;
@@ -171,7 +180,7 @@ export function recuadroEnCurso(ctx: CanvasRenderingContext2D, caja: Rect, u: Ub
     [x0, y1],
   ]) {
     ctx.beginPath();
-    ctx.arc(ax, ay, 5 * px, 0, Math.PI * 2);
+    ctx.arc(ax, ay, 6.5 * px, 0, Math.PI * 2);
     ctx.fillStyle = oscuro ? '#23201C' : '#FBF7EF';
     ctx.fill();
     ctx.lineWidth = 2 * px;
@@ -205,7 +214,7 @@ export function dibujarFrase(
 ) {
   const rnd = azar(f.id);
   if (f.tipo === 'recuadro') {
-    if (f.caja) esquinasLapiz(ctx, f.caja, esLapiz(f.color) ? LAPICES[f.color].hex : LAPICES.grafito.hex, u, rnd);
+    if (f.caja) cuadroLapiz(ctx, f.caja, esLapiz(f.color) ? LAPICES[f.color].hex : LAPICES.grafito.hex, u, rnd);
     return;
   }
   if (f.tipo === 'encerrado' || esLapiz(f.color)) {

@@ -13,7 +13,7 @@ const MODOS: Record<Herramienta, { icono: NombreIcono; texto: string }> = {
   borrador: { icono: 'eraser', texto: 'Borrando · toca una marca' },
 };
 
-export function AvisoModo() {
+export function AvisoModo({ texto }: { texto?: string }) {
   const herramienta = useFrases((s) => s.herramienta);
   const usar = useFrases((s) => s.usar);
   if (!herramienta) return null;
@@ -21,7 +21,7 @@ export function AvisoModo() {
   return (
     <div className="aviso-modo" role="status">
       <Icono nombre={m.icono} tam={15} />
-      <span>{m.texto}</span>
+      <span>{texto ?? m.texto}</span>
       <button onClick={() => usar(null)}>Listo</button>
     </div>
   );

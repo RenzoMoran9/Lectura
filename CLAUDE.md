@@ -29,7 +29,7 @@ La uso sobre todo desde el celular, y también desde la computadora.
 5. **Menú discreto en círculo.** Es un botón chico y semitransparente en una esquina, que puedo mover. No tapa la lectura. Al tocarlo se abre en abanico con:
    - resaltador (5 colores);
    - lápiz para encerrar frases (yo normalmente encierro las frases);
-   - recuadro, como una captura: arrastro de una esquina a la otra y se guarda lo que queda dentro (en la página quedan sus cuatro esquinas a lápiz);
+   - recuadro, como una captura: arrastro de una esquina a la otra; el cuadro se queda para ajustarlo y lo guardo o lo comparto (en la página queda el cuadro completo a lápiz);
    - borrador;
    - papel;
    - Mis frases.
@@ -47,7 +47,7 @@ La uso sobre todo desde el celular, y también desde la computadora.
     - Voces de Entre Hojas, en español latino y gratis: **Lucía** y **Elena** (mujer), **Mateo** y **Andrés** (hombre). Se bajan una vez (unos 145 MB) y después funcionan sin internet. También están las voces en español del celular.
 12. **Repaso del día, tipo tarjetas.** «Para recordar hoy» avisa cuántas frases tocan. Las que recuerdo vuelven en 3, 7, 14… días; las otras, mañana. Cuenta los días seguidos.
 13. **Nota en una frase** (corta, hasta 280 letras) y **exportar Mis frases** en un archivo de texto, agrupadas por libro.
-14. **Compartir una frase con marco.** Botón «Compartir» en cada frase (Mis frases, repasos y panel de la PC). Se elige entre 5 marcos (clásico, antiguo, noche, cuaderno y flor seca) y sale una imagen vertical para estados e historias (1080 × 1920), solo con el texto de la frase bien escrito (sin el resaltador ni el lápiz), el libro, el autor y la página; el texto se puede corregir antes de compartir. Después de un recuadro, el aviso «Guardada en Mis frases» trae «Compartir». «Guardar imagen» la baja al teléfono; «Compartir» abre WhatsApp, Instagram o la app que elija.
+14. **Compartir una frase con marco.** Botón «Compartir» en cada frase (Mis frases, repasos y panel de la PC). Se elige entre 5 marcos (clásico, antiguo, noche, cuaderno y flor seca) y sale una imagen vertical para estados e historias (1080 × 1920), solo con el texto de la frase bien escrito (sin el resaltador ni el lápiz) y el nombre del libro (sin página ni autor). «Borrar palabras»: toco o arrastro sobre las que sobran y queda así también en Mis frases. Si el menú de compartir no se abre, aparece la imagen grande para guardarla o compartirla con el dedo. «Guardar imagen» la baja al teléfono; «Compartir» abre WhatsApp, Instagram o la app que elija.
 
 ## Lo que NO va (por ahora)
 Tienda de libros, notas largas, conversión a EPUB y reacomodar el texto del PDF.

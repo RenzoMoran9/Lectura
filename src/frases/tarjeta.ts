@@ -1,6 +1,6 @@
 // Tarjetas para compartir una frase: la frase dentro de un marco, en formato de estado de WhatsApp o
 // de historia (1080 × 1920). Se dibuja solo el texto, bien escrito (sin el resaltador ni el lápiz
-// con que la marqué), con el libro y la página abajo.
+// con que la marqué), y abajo solo el nombre del libro.
 
 import { azar } from './dibujo';
 import { esLapiz, RESALTADORES, type Frase } from './modelo';
@@ -31,29 +31,38 @@ export interface DatosTarjeta {
 const LETRA_SOLA = /^[aeouyAEOUY]$/;
 
 /**
- * El texto de la frase bien escrito para la tarjeta: sin espacios de más, sin letras sueltas
- * («C A P Í T U L O» → «CAPÍTULO»), sin restos de palabras cortadas al marcar, y con puntos
- * suspensivos donde la frase empieza o termina a mitad de una oración.
+ * El texto de la frase limpio: sin espacios de más, sin letras sueltas («C A P Í T U L O» →
+ * «CAPÍTULO»), con las palabras cortadas al final del renglón unidas y sin restos de una capitular.
  */
-export function textoBonito(texto: string): string {
+export function limpiarTexto(texto: string): string {
   // Letras espaciadas (títulos, capitulares): cuatro o más letras sueltas seguidas forman una
   // palabra (un espacio doble separa una palabra de otra).
   let t = texto.replace(/(?:^|(?<=\s))(?:\p{L} ){3,}\p{L}(?=\s|$|[,.;:])/gu, (m) => m.replace(/ /g, ''));
   t = t.replace(/\s+/g, ' ').trim();
   // Palabras cortadas con guion al final del renglón («pala- bra» → «palabra»).
-  t = t.replace(/(\p{Ll})[-‐­] (\p{Ll})/gu, '$1$2');
+  t = t.replace(/(\p{Ll})[-‐\u00AD] (\p{Ll})/gu, '$1$2');
   // Una letra suelta al principio que no es palabra (la capitular perdida de «En un lugar…»).
   t = t.replace(/^[«"“(—–-]*\s*/u, '');
   const primera = t.split(' ')[0];
   if (/^\p{L}$/u.test(primera) && !LETRA_SOLA.test(primera)) t = t.slice(primera.length).trim();
-  t = t.replace(/[\s—–-]+$/u, '');
+  return t.replace(/[\s—–-]+$/u, '');
+}
+
+/** Puntos suspensivos donde la frase empieza o termina a mitad de una oración. */
+export function conPuntos(texto: string): string {
+  let t = texto.trim();
   if (!t) return '';
-  // Empieza a mitad de oración (minúscula) o termina sin punto: puntos suspensivos.
   if (/^\p{Ll}/u.test(t)) t = `…${t}`;
   if (/[,;:]$/.test(t)) t = t.slice(0, -1);
   if (!/[.!?…»"”)]$/.test(t)) t = `${t}…`;
   return t;
 }
+
+/** El texto de la frase bien escrito para la tarjeta. */
+export const textoBonito = (texto: string) => conPuntos(limpiarTexto(texto));
+
+/** Las palabras de una frase, tal como se pueden borrar al compartir. */
+export const palabrasDe = (texto: string) => limpiarTexto(texto).split(' ').filter(Boolean);
 
 type Ctx = CanvasRenderingContext2D;
 type Caja = { x: number; y: number; w: number; h: number };
@@ -156,11 +165,15 @@ function acomodar(ctx: Ctx, texto: string, e: Estilo) {
   return mejor;
 }
 
+/** Una línea centrada; si no cabe (un título largo), la letra se achica. */
 function centrado(ctx: Ctx, texto: string, y: number, letra: string, color: string, espaciado = 0) {
   ctx.font = letra;
   ctx.fillStyle = color;
   ctx.textAlign = 'center';
   (ctx as Ctx & { letterSpacing?: string }).letterSpacing = `${espaciado}px`;
+  const max = ANCHO - 240;
+  const ancho = ctx.measureText(texto).width;
+  if (ancho > max) ctx.font = letra.replace(/(\d+(?:\.\d+)?)px/, (_, px: string) => `${Math.max(20, (+px * max) / ancho).toFixed(1)}px`);
   ctx.fillText(texto, ANCHO / 2, y);
   (ctx as Ctx & { letterSpacing?: string }).letterSpacing = '0px';
 }
@@ -191,22 +204,19 @@ function adorno(ctx: Ctx, x: number, y: number, escala: number, color: string) {
   ctx.restore();
 }
 
-const pagina = (f: Frase) => `pág. ${(f.pagina + 1).toLocaleString('es')}`;
-const libroYAutor = (f: Frase, d: DatosTarjeta) => [d.autor, pagina(f)].filter(Boolean).join(' · ');
 
 /** La firma de la app, chiquita, al pie. */
 function firma(ctx: Ctx, color: string) {
   centrado(ctx, 'ENTRE HOJAS', ALTO - 110, '600 22px "DM Sans"', color, 7);
 }
 
-/** Pie de la mayoría de los marcos: una rayita, el libro en cursiva y el autor con la página. */
-function pieComun(tinta: string, suave: string, raya: string) {
-  return (ctx: Ctx, f: Frase, d: DatosTarjeta, fin: number) => {
-    const y = Math.min(fin + 90, ALTO - 330);
+/** Pie de la mayoría de los marcos: una rayita y el nombre del libro en cursiva. */
+function pieComun(tinta: string, raya: string) {
+  return (ctx: Ctx, _f: Frase, d: DatosTarjeta, fin: number) => {
+    const y = Math.min(fin + 90, ALTO - 300);
     ctx.fillStyle = raya;
     ctx.fillRect(ANCHO / 2 - 50, y, 100, 3);
-    centrado(ctx, d.titulo, y + 78, 'italic 400 44px "Fraunces"', tinta);
-    centrado(ctx, libroYAutor(f, d).toUpperCase(), y + 130, '500 25px "DM Sans"', suave, 4);
+    centrado(ctx, d.titulo, y + 82, 'italic 400 46px "Fraunces"', tinta);
   };
 }
 
@@ -240,7 +250,7 @@ const ESTILOS: Record<Marco, Estilo> = {
     tinta: '#2A2520',
     alinear: 'center',
     tamanos: [40, 110],
-    pie: pieComun('#2A2520', '#6A6056', 'rgba(142,47,42,.7)'),
+    pie: pieComun('#2A2520', 'rgba(142,47,42,.7)'),
     encima: (ctx) => {
       // La cinta marcapáginas que cuelga desde arriba.
       const x = 840;
@@ -322,11 +332,10 @@ const ESTILOS: Record<Marco, Estilo> = {
     tinta: '#3A2817',
     alinear: 'center',
     tamanos: [40, 104],
-    pie: (ctx, f, d, fin) => {
-      const y = Math.min(fin + 80, ALTO - 340);
+    pie: (ctx, _f, d, fin) => {
+      const y = Math.min(fin + 80, ALTO - 300);
       adorno(ctx, ANCHO / 2, y, 0.8, 'rgba(92,60,30,.7)');
-      centrado(ctx, d.titulo.toUpperCase(), y + 80, '400 36px "EB Garamond"', '#3A2817', 6);
-      centrado(ctx, libroYAutor(f, d), y + 130, 'italic 400 32px "EB Garamond"', '#6B4A2B');
+      centrado(ctx, d.titulo.toUpperCase(), y + 82, '400 38px "EB Garamond"', '#3A2817', 6);
     },
     encima: (ctx) => firma(ctx, 'rgba(92,60,30,.55)'),
   },
@@ -376,7 +385,7 @@ const ESTILOS: Record<Marco, Estilo> = {
     alinear: 'center',
     tamanos: [38, 100],
     oscuro: true,
-    pie: pieComun('#D6CCBA', '#9C907F', 'rgba(201,168,106,.7)'),
+    pie: pieComun('#D6CCBA', 'rgba(201,168,106,.7)'),
     encima: (ctx) => firma(ctx, 'rgba(214,204,186,.4)'),
   },
 
@@ -414,13 +423,11 @@ const ESTILOS: Record<Marco, Estilo> = {
     tinta: '#26364F',
     alinear: 'left',
     tamanos: [52, 130],
-    pie: (ctx, f, d, fin) => {
-      ctx.font = '700 50px "Caveat"';
+    pie: (ctx, _f, d, fin) => {
+      ctx.font = '700 52px "Caveat"';
       ctx.fillStyle = '#4A5873';
       ctx.textAlign = 'right';
-      ctx.fillText(`— ${d.titulo}${d.autor ? `, ${d.autor}` : ''}`, ANCHO - 100, Math.min(fin + 110, ALTO - 300));
-      ctx.font = '700 40px "Caveat"';
-      ctx.fillText(pagina(f), ANCHO - 100, Math.min(fin + 170, ALTO - 240));
+      ctx.fillText(`— ${d.titulo}`, ANCHO - 100, Math.min(fin + 110, ALTO - 260), ANCHO - 320);
     },
     encima: (ctx, rnd, f) => {
       // Cinta adhesiva arriba, del color de la marca.
@@ -456,10 +463,9 @@ const ESTILOS: Record<Marco, Estilo> = {
     tinta: '#43362B',
     alinear: 'center',
     tamanos: [40, 104],
-    pie: (ctx, f, d, fin) => {
-      const y = Math.min(fin + 70, ALTO - 420);
-      centrado(ctx, d.titulo, y + 60, 'italic 400 42px "Fraunces"', '#43362B');
-      centrado(ctx, libroYAutor(f, d), y + 108, '500 26px "DM Sans"', '#7B6A58', 2);
+    pie: (ctx, _f, d, fin) => {
+      const y = Math.min(fin + 70, ALTO - 400);
+      centrado(ctx, d.titulo, y + 64, 'italic 400 44px "Fraunces"', '#43362B');
     },
     encima: (ctx) => {
       ctx.save();

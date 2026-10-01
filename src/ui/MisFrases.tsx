@@ -4,7 +4,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFrases } from '../estado/frases';
 import { useLibros } from '../estado/libros';
-import { azar, colorCss, lazoAlrededor } from '../frases/dibujo';
+import { colorCss, cuadroAMano, lazoAlrededor } from '../frases/dibujo';
 import { COLORES_LAPIZ, COLORES_RESALTADOR, esLapiz, LAPICES, rgbDe, type ColorMarca, type Frase } from '../frases/modelo';
 import { descargar, textoParaExportar } from '../frases/exportar';
 import { Icono } from './Icono';
@@ -78,27 +78,27 @@ function Encerrado({ texto, color, semilla }: { texto: string; color: ColorMarca
   );
 }
 
-/** Texto de un recuadro: con sus cuatro esquinas a lápiz, como quedó en la página. */
+/** Texto de un recuadro: dentro de su cuadro a lápiz, como quedó en la página. */
 function EnRecuadro({ texto, color, semilla }: { texto: string; color: ColorMarca; semilla: string }) {
+  const caja = useRef<HTMLSpanElement>(null);
+  const [d, setD] = useState('');
+  useLayoutEffect(() => {
+    const el = caja.current;
+    if (!el) return;
+    const medir = () => setD(cuadroAMano(el.offsetWidth, el.offsetHeight, semilla));
+    medir();
+    const obs = new ResizeObserver(medir);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [texto, semilla]);
   const hex = esLapiz(color) ? LAPICES[color].hex : LAPICES.grafito.hex;
-  const rnd = azar(semilla);
-  const esquina = () => {
-    // Una «L» de un trazo, que se pasa un poquito de la esquina.
-    const t = () => ((rnd() - 0.5) * 1.6).toFixed(1);
-    return `M21 ${2.4 + +t() / 2} L${1.2 + +t() / 3} 2.2 M2.2 ${1 + +t() / 3} L${2.4 + +t() / 2} 21`;
-  };
   return (
-    <span className="en-recuadro">
+    <span className="en-recuadro" ref={caja}>
       <span className="rec-texto">{texto}</span>
-      {(['ai', 'ad', 'bd', 'bi'] as const).map((p) => {
-        const d = esquina();
-        return (
-          <svg key={p} className={`esquina ${p}`} viewBox="0 0 24 24" aria-hidden="true">
-            <path d={d} fill="none" stroke={hex} strokeWidth="1.7" strokeLinecap="round" opacity=".82" />
-            <path d={d} fill="none" stroke={hex} strokeWidth=".8" strokeLinecap="round" opacity=".35" transform="translate(.7 .6)" />
-          </svg>
-        );
-      })}
+      <svg className="cuadro" aria-hidden="true">
+        <path d={d} fill="none" stroke={hex} strokeWidth="1.6" strokeLinecap="round" opacity=".82" />
+        <path d={d} fill="none" stroke={hex} strokeWidth=".8" strokeLinecap="round" opacity=".35" transform="translate(.7 .6)" />
+      </svg>
     </span>
   );
 }

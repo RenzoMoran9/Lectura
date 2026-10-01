@@ -45,11 +45,12 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
 - **Resaltar** (`src/frases/`): se lee la capa de texto de PDF.js y se calcula la caja de cada letra; al arrastrar,
   la selección se ajusta a palabras completas, aunque ocupe varios renglones (y quita el guion de las palabras cortadas).
 - **Encerrar a lápiz**: el círculo se dibuja a mano y queda tal cual; se guardan las palabras que quedaron dentro.
-- **Recuadro** (`enRecuadro` en `src/frases/texto.ts`, `esquinasLapiz` en `src/frases/dibujo.ts`): como una captura;
-  se arrastra de una esquina a la otra (lo de afuera se oscurece y se ve cuántos renglones van dentro). Se guardan las
-  palabras completas que quedaron dentro (a media columna, solo lo de adentro de cada renglón) y en la página quedan
-  cuatro esquinas a lápiz. En escaneados se guarda el recorte justo del recuadro. El borrador lo quita tocando dentro
-  (si ahí hay otra marca, primero esa). Al guardarlo, el aviso trae «Compartir».
+- **Recuadro** (`enRecuadro` en `src/frases/texto.ts`, `cuadroLapiz` en `src/frases/dibujo.ts`): como una captura;
+  se arrastra de una esquina a la otra (lo de afuera se oscurece y se ve cuántos renglones van dentro). Al soltar, el
+  cuadro se queda: se ajusta moviendo sus esquinas (o entero, tocando dentro) y abajo aparece «✕ · Guardar ·
+  Compartir» («Listo» arriba también lo guarda). Se guardan las palabras completas que quedaron dentro (a media
+  columna, solo lo de adentro de cada renglón) y en la página queda el cuadro completo a lápiz. En escaneados se guarda
+  el recorte justo del recuadro. El borrador lo quita tocando dentro (si ahí hay otra marca, primero esa).
 - **Escaneados**: sin texto, el resaltador deja una banda a mano y la frase se guarda como recorte de la página.
 - **Las marcas van en el papel**: se dibujan en una capa blanca que el shader multiplica con la página, así se curvan
   con la hoja, se ven en su reverso y funcionan en los 4 papeles (en «noche» se invierten con la página).
@@ -126,8 +127,12 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
 - **Compartir con marco** (`src/frases/tarjeta.ts`, `src/ui/CompartirFrase.tsx`): «Compartir» en cada frase abre una
   hoja con la vista previa y cinco marcos (clásico, antiguo, noche, cuaderno y flor seca). La imagen sale en formato
   de estado (1080 × 1920), solo con el texto bien escrito (sin la marca: junta letras espaciadas y palabras cortadas,
-  quita la capitular suelta y pone «…» si la frase empieza o termina a medias), el libro, el autor y la página; la letra
-  se achica sola si la frase es larga. «Corregir el texto» deja cambiarlo solo para la imagen. «Guardar imagen» la baja; «Compartir» usa el menú del sistema (Web Share).
+  quita la capitular suelta y pone «…» si la frase empieza o termina a medias) y el nombre del libro; la letra se achica
+  sola si la frase es larga. «Borrar palabras»: se toca o se arrastra sobre las que sobran (y se tocan otra vez para
+  recuperarlas); queda guardado en la frase (`textoOriginal` y `borradas`) y «Como estaba» lo deshace. «Guardar
+  imagen» la baja; «Compartir» usa el menú del sistema (Web Share) con la imagen hecha en el mismo toque. Si el menú no
+  se abre (o en el iPhone instalado, donde no hay descargas), aparece la imagen grande para guardarla o compartirla
+  manteniendo el dedo encima. La hoja se dibuja directo en `<body>` para no heredar los gestos del lector.
 - **Exportar** (`src/frases/exportar.ts`): descarga las frases que se ven (con el buscador y los filtros puestos) en
   un archivo `.txt`, agrupadas por libro y por página, con su color y su nota.
 

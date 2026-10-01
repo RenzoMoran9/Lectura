@@ -97,6 +97,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const [saltoA, setSaltoA] = useState<number | null>(null);
   const [mensaje, setMensaje] = useState<Mensaje | null>(null);
   const [compartirDe, setCompartirDe] = useState<Frase | null>(null);
+  /** El recuadro que espera «Guardar» o «Compartir»: dónde está en la pantalla (para no taparlo). */
+  const [recuadro, setRecuadro] = useState<{ arriba: number; abajo: number } | null>(null);
   const [hayZoom, setHayZoom] = useState(false);
   const [capitulos, setCapitulos] = useState<Capitulo[]>([]);
   const [ajuste, setAjuste] = useState<Ajuste>(() => (useAjustes.getState().ajusteTexto ? 'texto' : 'pagina'));
@@ -790,22 +792,29 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         return useFrases.getState().frases.filter((f) => f.libroId === libro.id && f.pagina === i);
       },
       previa: (pv) => dibujarPrevia(pv),
-      guardar: (f, donde) => {
+      guardar: (f, donde, opciones) => {
         const nueva = { ...f, libroTitulo: libro.titulo };
         void useFrases.getState().agregar(nueva);
+        if (opciones?.compartir) setCompartirDe(nueva);
         // La marca ya quedó en la página: la vista previa se borra en cuanto se dibuja.
         requestAnimationFrame(() => requestAnimationFrame(() => dibujarPrevia(null)));
         const r = contenedor.current?.getBoundingClientRect();
         const rect = marcaPagina.current?.rect ?? dispRef.current?.hoja;
         const z = zoomRef.current;
-        const x = (r?.left ?? 0) + z.x + z.z * ((rect?.x ?? 0) + donde.x);
         setMensaje({
           texto: 'Guardada en Mis frases',
-          // El recuadro es una captura: se puede compartir al tiro.
-          ...(f.tipo === 'recuadro' ? { accion: { texto: 'Compartir', icono: 'share' as const, hacer: () => setCompartirDe(nueva) }, x: x - 150 } : { x }),
+          x: (r?.left ?? 0) + z.x + z.z * ((rect?.x ?? 0) + donde.x),
           y: (r?.top ?? 0) + z.y + z.z * ((rect?.y ?? 0) + donde.y),
           clave: Date.now(),
         });
+      },
+      alPendiente: (pend) => {
+        if (!pend) return setRecuadro(null);
+        const r = contenedor.current?.getBoundingClientRect();
+        const rect = marcaPagina.current?.rect ?? dispRef.current?.hoja;
+        const z = zoomRef.current;
+        const y = (v: number) => (r?.top ?? 0) + z.y + z.z * ((rect?.y ?? 0) + v);
+        setRecuadro({ arriba: y(pend.caja.y), abajo: y(pend.caja.y + pend.caja.h) });
       },
       borrar: (ids) => {
         void useFrases
@@ -1024,6 +1033,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       setDisp(d);
       pasador.current?.cancelar();
       marcador.current?.cancelar();
+      requestAnimationFrame(() => requestAnimationFrame(() => marcador.current?.redibujar()));
       quitarZoom();
       motor.current?.medir(w, h, dprLienzo, d.hoja, { recortarLomo: d.modo === 'mesa', doble: d.modo === 'doble' });
       paginas.current?.configurar({ ancho: d.hoja.w, alto: d.hoja.h, dpr, caja: d.caja, titulo: libro.titulo });
@@ -1201,18 +1211,35 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
 
   useEffect(() => {
     if (herramienta) setCromo(false);
-    marcador.current?.cancelar();
+    // Al dejar la herramienta (o cambiarla), el recuadro que esperaba se guarda.
+    if (herramienta !== 'recuadro') marcador.current?.terminar();
+    else marcador.current?.cancelar();
   }, [herramienta]);
 
   // Al salir del libro se vuelve a leer: la próxima vez el dedo pasa la hoja.
-  useEffect(() => () => useFrases.getState().usar(null), []);
+  useEffect(
+    () => () => {
+      marcador.current?.terminar();
+      useFrases.getState().usar(null);
+    },
+    [],
+  );
 
   /** Vista previa de la marca mientras el dedo la hace (encima de la página que se marca). */
   const dibujarPrevia = useCallback((pv: Previa) => {
     const c = lienzoPrevia.current;
+    if (!c) return;
+    // Borrar no depende de nada más (si no, la vista previa podía quedarse pegada).
+    if (!pv) {
+      // Se reinicia el lienzo entero (un clearRect a veces no alcanzaba a borrar en Chrome).
+      const { width, height } = c;
+      c.width = width;
+      c.height = height;
+      return;
+    }
     const pags = paginas.current;
     const mp = marcaPagina.current;
-    if (!c || !pags || !mp) return;
+    if (!pags || !mp) return;
     const tam = pags.lienzoTam;
     const ub = pags.ubicacion(mp.indice);
     if (!tam || !ub) return;
@@ -1222,7 +1249,6 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     }
     const ctx = c.getContext('2d')!;
     ctx.clearRect(0, 0, c.width, c.height);
-    if (!pv) return;
     const u = { x: ub.x, y: ub.y, escala: ub.escala, dpr: tam.dpr };
     if (pv.tipo === 'recuadro' && pv.caja) {
       recuadroEnCurso(ctx, pv.caja, u, pv.renglones, useAjustes.getState().papel === 'noche');
@@ -1747,7 +1773,27 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         <PanelFrases libroId={libro.id} alIr={irA} alCerrar={() => useAjustes.getState().poner({ panelFrases: false })} />
       )}
 
-      <AvisoModo />
+      <AvisoModo texto={recuadro ? 'Ajusta las esquinas o arrastra otro' : undefined} />
+      {recuadro && herramienta === 'recuadro' && (
+        <div
+          className={`barra-recuadro ${recuadro.abajo > window.innerHeight - 190 ? 'arriba' : ''}`}
+          role="toolbar"
+          aria-label="Recuadro"
+        >
+          <span className="pista">Mueve las esquinas para ajustarlo</span>
+          <div>
+            <button className="x" aria-label="Descartar el recuadro" onClick={() => marcador.current?.descartar()}>
+              <Icono nombre="x" tam={18} />
+            </button>
+            <button onClick={() => marcador.current?.confirmar(false)}>
+              <Icono nombre="check" tam={16} grosor={2.6} /> Guardar
+            </button>
+            <button className="principal" onClick={() => marcador.current?.confirmar(true)}>
+              <Icono nombre="share" tam={16} /> Compartir
+            </button>
+          </div>
+        </div>
+      )}
       <AvisoBreve mensaje={mensaje} alCerrar={cerrarMensaje} />
       {compartirDe && <CompartirFrase f={compartirDe} alCerrar={() => setCompartirDe(null)} />}
       {regreso && !herramienta && (

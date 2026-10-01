@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { textoBonito } from './tarjeta';
+import { conPuntos, palabrasDe, textoBonito } from './tarjeta';
 
 describe('el texto de la tarjeta, bien escrito', () => {
   it('deja la frase completa como está', () => {
@@ -23,5 +23,12 @@ describe('el texto de la tarjeta, bien escrito', () => {
 
   it('no toca las palabras de una letra', () => {
     expect(textoBonito('y a la mañana siguiente se fue.')).toBe('…y a la mañana siguiente se fue.');
+  });
+
+  it('las palabras para borrar y el texto que queda', () => {
+    const p = palabrasDe('partes de su hacienda. El resto della concluían sayo');
+    expect(p).toHaveLength(9);
+    expect(conPuntos(p.slice(4).join(' '))).toBe('El resto della concluían sayo…');
+    expect(conPuntos(p.slice(0, 4).join(' '))).toBe('…partes de su hacienda.');
   });
 });

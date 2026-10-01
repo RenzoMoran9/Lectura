@@ -51,6 +51,12 @@ export interface Frase {
   grosor?: number; // ancho del resaltado a mano, en unidades de la página
   caja?: Rect; // recuadro: la zona capturada (en la página quedan sus cuatro esquinas a lápiz)
   creada: number;
+  /**
+   * Si al compartir borré palabras: el texto como se capturó y cuáles borré (posiciones en sus
+   * palabras). `texto` queda con lo que dejé.
+   */
+  textoOriginal?: string;
+  borradas?: number[];
   /** Una nota corta mía sobre la frase (hasta 280 letras). */
   nota?: string;
   /** Repaso del día: en qué caja va (0 = recién guardada) y cuándo toca repasarla. */
