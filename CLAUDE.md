@@ -121,10 +121,10 @@ Pantallas:
   - Noche: invertir colores y dar un tono cálido.
   - El PDF nunca se modifica.
 - **Sonido:** con Web Audio API.
-  - Un roce en bucle cuyo volumen sigue la velocidad del dedo, más un golpe al asentarse la hoja.
+  - Una hoja de verdad suena bajito y por partes: un chasquido corto al tomar la esquina, el roce del aire mientras cruza (en granos que se vuelven más seguidos y fuertes con la velocidad; con la hoja quieta, silencio), algún crujido suelto y un asiento suave al posarse.
   - Varias variantes elegidas al azar, para que no suene repetido.
-  - Grabaciones reales de licencia libre (CC0, por ejemplo de Freesound). Alternativa: generarlas con ElevenLabs.
-  - Dos juegos de sonido: «libro nuevo» y «libro antiguo».
+  - Grabaciones reales de licencia libre: las hojas de «RPG Audio» de Kenney (CC0), recortadas con `scripts/sonido-hoja.py`. Alternativa: generarlas con ElevenLabs.
+  - Dos juegos de sonido: «libro nuevo» y «libro antiguo» (más seco y opaco, con más crujidos).
   - Mientras se marca: el roce del lápiz, del resaltador o de la goma, que sigue la velocidad del dedo.
   - Sonido de fondo opcional mientras se lee, elegido para cada libro: para relajarse (playa, bosque y fogata, lluvia) o según el género (terror, suspenso, drama, acción), con su propio volumen.
 - **Gestos:**

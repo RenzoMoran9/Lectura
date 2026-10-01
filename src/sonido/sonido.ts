@@ -1,21 +1,37 @@
-// Sonido de la hoja con Web Audio:
-//  - un roce en bucle mientras la hoja se mueve: su volumen y su brillo siguen la velocidad del dedo;
-//  - un golpecito suave cuando la hoja se asienta.
-// Hay varias grabaciones de cada uno y se eligen al azar, para que no suene siempre igual.
-// Dos juegos: «libro nuevo» (papel firme) y «libro antiguo» (papel seco y quebradizo).
+// Sonido de la hoja con Web Audio, hecho con grabaciones reales de un libro (CC0, ver
+// public/sonidos/LICENCIA.md y scripts/sonido-hoja.py). Una hoja de verdad suena bajito y por
+// partes, no como un siseo parejo:
+//  - la toma: un chasquido corto cuando el dedo levanta la esquina;
+//  - el aire: mientras la hoja cruza, granitos del roce real; con la hoja más rápida hay más
+//    granos, más fuertes y un poco más brillantes; con la hoja quieta, silencio;
+//  - algún crujido suelto del papel al doblarse (más en el libro antiguo);
+//  - el asiento: la hoja que se posa sobre las otras, suave.
+// Dos papeles: «libro nuevo» (firme) y «libro antiguo» (seco, más opaco y con más crujidos).
 
 export type JuegoSonido = 'nuevo' | 'antiguo';
 
-const ARCHIVOS: Record<JuegoSonido, { roce: string[]; golpe: string[] }> = {
-  nuevo: {
-    roce: ['roce-nuevo-1', 'roce-nuevo-2'],
-    golpe: ['golpe-nuevo-1', 'golpe-nuevo-2', 'golpe-nuevo-3'],
-  },
-  antiguo: {
-    roce: ['roce-antiguo-1', 'roce-antiguo-2'],
-    golpe: ['golpe-antiguo-1', 'golpe-antiguo-2', 'golpe-antiguo-3'],
-  },
+/** Cómo suena cada papel: las grabaciones son las mismas, cambia cómo se tocan. */
+const PAPELES: Record<JuegoSonido, { tono: number; brillo: number; grave: number; crujidos: number; asiento: number; asientoBrillo: number }> = {
+  nuevo: { tono: 1, brillo: 7000, grave: 260, crujidos: 1.2, asiento: 1, asientoBrillo: 7500 },
+  antiguo: { tono: 0.88, brillo: 5000, grave: 340, crujidos: 5, asiento: 0.85, asientoBrillo: 4200 },
 };
+
+// Niveles a volumen 1 (amplitud). A toda velocidad el aire queda cerca de −25 dBFS y el asiento
+// llega a unos −8 dBFS de pico: como una hoja de verdad, que se oye pero no se impone.
+const NIVEL_AIRE = 0.72;
+const NIVEL_TOMA = 0.11;
+const NIVEL_CRUJIDO = 0.09;
+const NIVEL_ASIENTO = 0.45;
+/** Velocidad de la hoja (px CSS por ms) desde la que el aire suena con toda su fuerza. */
+const VELOCIDAD_PLENA = 1.8;
+
+type Trozo = [inicio: number, fin: number];
+interface Hoja {
+  buffer: AudioBuffer;
+  toma: Trozo[];
+  aire: Trozo[];
+  asiento: Trozo[];
+}
 
 /** Lo que suena mientras se marca: lápiz al encerrar, resaltador y goma de borrar. */
 export type TipoTrazo = 'lapiz' | 'resaltador' | 'borrador';
@@ -24,11 +40,6 @@ const TRAZOS: Record<TipoTrazo, string[]> = {
   resaltador: ['resaltador-1'],
   borrador: ['borrador-1'],
 };
-
-interface Juego {
-  roce: AudioBuffer[];
-  golpe: AudioBuffer[];
-}
 
 type Ctx = AudioContext;
 
@@ -54,7 +65,7 @@ function hacerBucle(ctx: Ctx, b: AudioBuffer, fundido = 0.3, borde = 0.06): Audi
   return salida;
 }
 
-/** Ajusta el nivel (RMS para el roce; pico para el golpe) y quita el silencio del principio. */
+/** Ajusta el nivel (RMS o pico) y, con pico, quita el silencio del principio. */
 function normalizar(ctx: Ctx, b: AudioBuffer, modo: 'rms' | 'pico', objetivo: number): AudioBuffer {
   let inicio = 0;
   const umbral = 0.02;
@@ -87,14 +98,20 @@ function normalizar(ctx: Ctx, b: AudioBuffer, modo: 'rms' | 'pico', objetivo: nu
 
 export class SonidoPapel {
   private ctx: Ctx | null = null;
-  private juegos = new Map<JuegoSonido, Promise<Juego>>();
-  private cargados = new Map<JuegoSonido, Juego>();
   private maestro: GainNode | null = null;
-  private roce: { fuente: AudioBufferSourceNode; ganancia: GainNode; filtro: BiquadFilterNode } | null = null;
+  private hoja: Hoja | null = null;
+  private cargandoHoja: Promise<Hoja> | null = null;
+  private roce: {
+    entrada: AudioNode;
+    agudos: BiquadFilterNode;
+    bus: GainNode;
+    intensidad: number;
+    proximo: number;
+    proximoCrujido: number;
+  } | null = null;
   private trazos = new Map<TipoTrazo, AudioBuffer[]>();
   private cargandoTrazos = false;
   private trazo: { fuente: AudioBufferSourceNode; ganancia: GainNode; velocidad: number } | null = null;
-  private velocidad = 0;
   activo = true;
   volumen = 0.7;
   juego: JuegoSonido = 'nuevo';
@@ -114,9 +131,10 @@ export class SonidoPapel {
       this.ctx = new Clase({ latencyHint: 'interactive' });
       this.maestro = this.ctx.createGain();
       this.maestro.connect(this.ctx.destination);
+      this.sala(this.ctx, this.maestro);
     }
     if (this.ctx.state !== 'running') void this.ctx.resume().catch(() => {});
-    void this.cargar(this.juego);
+    void this.cargarHoja().catch(() => {});
     this.cargarTrazos();
     this.alDespertar?.(this.ctx);
   }
@@ -129,77 +147,158 @@ export class SonidoPapel {
     return this.ctx;
   }
 
-  private cargar(juego: JuegoSonido): Promise<Juego> {
-    let p = this.juegos.get(juego);
-    if (!p && this.ctx) {
-      const ctx = this.ctx;
-      const traer = async (nombre: string) => {
-        const r = await fetch(`${import.meta.env.BASE_URL}sonidos/${nombre}.mp3`);
-        if (!r.ok) throw new Error(`Falta el sonido ${nombre}`);
-        const datos = await r.arrayBuffer();
-        return await ctx.decodeAudioData(datos);
-      };
-      p = Promise.all([
-        Promise.all(ARCHIVOS[juego].roce.map(traer)),
-        Promise.all(ARCHIVOS[juego].golpe.map(traer)),
-      ]).then(([roce, golpe]) => ({
-        roce: roce.map((b) => hacerBucle(ctx, normalizar(ctx, b, 'rms', 0.16))),
-        golpe: golpe.map((b) => normalizar(ctx, b, 'pico', 0.62)),
-      }));
-      p.then(
-        (j) => this.cargados.set(juego, j),
-        (e) => {
-          console.warn('No se pudieron cargar los sonidos', e);
-          this.juegos.delete(juego);
-        },
-      );
-      this.juegos.set(juego, p);
+  /**
+   * Un poco de cuarto: las grabaciones son de muy cerca, y una hoja se oye a la distancia de los
+   * ojos, con los primeros rebotes de la pieza. Eso además suaviza lo áspero del papel.
+   */
+  private sala(ctx: Ctx, entrada: AudioNode) {
+    try {
+      const largo = Math.floor(ctx.sampleRate * 0.09);
+      const ir = ctx.createBuffer(2, largo, ctx.sampleRate);
+      for (let c = 0; c < 2; c++) {
+        const d = ir.getChannelData(c);
+        let y = 0;
+        for (let i = 0; i < largo; i++) {
+          const t = i / ctx.sampleRate;
+          y += ((Math.random() * 2 - 1) * Math.exp(-t / 0.022) - y) * 0.35; // ruido que se apaga, opaco
+          d[i] = t < 0.004 ? 0 : y;
+        }
+      }
+      const conv = ctx.createConvolver();
+      conv.buffer = ir;
+      const humedo = ctx.createGain();
+      humedo.gain.value = 0.2;
+      entrada.connect(conv).connect(humedo).connect(ctx.destination);
+    } catch {
+      /* sin sala: suena igual, más seco */
     }
-    return p ?? Promise.reject(new Error('Audio sin iniciar'));
   }
 
-  /** El juego actual, solo si ya está cargado: en medio del gesto no se espera. */
-  private listo(): Juego | null {
-    return this.cargados.get(this.juego) ?? null;
+  private cargarHoja(): Promise<Hoja> {
+    const ctx = this.ctx;
+    if (!ctx) return Promise.reject(new Error('Audio sin iniciar'));
+    if (!this.cargandoHoja) {
+      const base = `${import.meta.env.BASE_URL}sonidos/`;
+      this.cargandoHoja = (async () => {
+        const [tabla, datos] = await Promise.all([
+          fetch(`${base}hoja.json`).then((r) => {
+            if (!r.ok) throw new Error('Falta hoja.json');
+            return r.json() as Promise<Omit<Hoja, 'buffer'>>;
+          }),
+          fetch(`${base}hoja.wav`).then((r) => {
+            if (!r.ok) throw new Error('Falta hoja.wav');
+            return r.arrayBuffer();
+          }),
+        ]);
+        const hoja = { ...tabla, buffer: await ctx.decodeAudioData(datos) };
+        this.hoja = hoja;
+        return hoja;
+      })();
+      this.cargandoHoja.catch((e) => {
+        console.warn('No se pudo cargar el sonido de la hoja', e);
+        this.cargandoHoja = null;
+      });
+    }
+    return this.cargandoHoja;
   }
 
   private get nivel() {
     return this.activo ? this.volumen : 0;
   }
 
-  /** Empieza el roce (en silencio: suena cuando la hoja se mueve). */
+  /** Toca un trozo de la grabación de la hoja. */
+  private tocar([a, b]: Trozo, cuando: number, nivel: number, tono: number, destino: AudioNode) {
+    const ctx = this.ctx;
+    const h = this.hoja;
+    if (!ctx || !h) return;
+    const fuente = ctx.createBufferSource();
+    fuente.buffer = h.buffer;
+    fuente.playbackRate.value = tono;
+    const g = ctx.createGain();
+    g.gain.value = nivel;
+    fuente.connect(g).connect(destino);
+    fuente.onended = () => g.disconnect();
+    fuente.start(cuando, a, b - a);
+  }
+
+  /** Un granito del aire de la hoja: un trozo corto del roce real, que entra y sale suave. */
+  private grano(cuando: number, i: number) {
+    const ctx = this.ctx;
+    const h = this.hoja;
+    const r = this.roce;
+    if (!ctx || !h || !r) return;
+    const p = PAPELES[this.juego];
+    const [a, b] = azar(h.aire);
+    const largo = 0.045 + Math.random() * 0.065;
+    const tono = p.tono * (0.92 + Math.random() * 0.16) * (0.96 + 0.08 * i);
+    const usable = b - a - largo * tono;
+    if (usable <= 0) return;
+    const fuente = ctx.createBufferSource();
+    fuente.buffer = h.buffer;
+    fuente.playbackRate.value = tono;
+    const g = ctx.createGain();
+    const nivel = this.nivel * NIVEL_AIRE * Math.pow(i, 0.9) * (0.55 + 0.45 * Math.random());
+    g.gain.setValueAtTime(0, cuando);
+    g.gain.linearRampToValueAtTime(nivel, cuando + largo * 0.4);
+    g.gain.linearRampToValueAtTime(0, cuando + largo);
+    fuente.connect(g).connect(r.entrada);
+    fuente.onended = () => g.disconnect();
+    fuente.start(cuando, a + Math.random() * usable, largo * tono);
+  }
+
+  /** Empieza el roce: el dedo toma la esquina (el aire suena cuando la hoja se mueve). */
   empezarRoce() {
     const ctx = this.ctx;
-    const j = this.listo();
-    if (!ctx || !j || !this.maestro || this.nivel === 0) return;
+    const h = this.hoja;
+    if (!ctx || !h || !this.maestro || this.nivel === 0) return;
     this.pararRoce(0.02);
-    const buf = azar(j.roce);
-    const fuente = ctx.createBufferSource();
-    fuente.buffer = buf;
-    fuente.loop = true;
-    const filtro = ctx.createBiquadFilter();
-    filtro.type = 'lowpass';
-    filtro.frequency.value = 2500;
-    filtro.Q.value = 0.4;
-    const ganancia = ctx.createGain();
-    ganancia.gain.value = 0;
-    fuente.connect(filtro).connect(ganancia).connect(this.maestro);
-    fuente.start(0, Math.random() * buf.duration);
-    this.roce = { fuente, ganancia, filtro };
-    this.velocidad = 0;
+    const p = PAPELES[this.juego];
+    const graves = ctx.createBiquadFilter();
+    graves.type = 'highpass';
+    graves.frequency.value = p.grave;
+    graves.Q.value = 0.5;
+    const agudos = ctx.createBiquadFilter();
+    agudos.type = 'lowpass';
+    agudos.frequency.value = 2000;
+    agudos.Q.value = 0.5;
+    const bus = ctx.createGain();
+    graves.connect(agudos).connect(bus).connect(this.maestro);
+    this.roce = { entrada: graves, agudos, bus, intensidad: 0, proximo: 0, proximoCrujido: 0 };
+    this.tocar(azar(h.toma), ctx.currentTime, this.nivel * NIVEL_TOMA * (0.6 + 0.4 * Math.random()), p.tono * (0.95 + Math.random() * 0.1), graves);
   }
 
   /** Velocidad de la hoja en px CSS por milisegundo. */
   moverRoce(velocidad: number) {
     const ctx = this.ctx;
-    if (!ctx || !this.roce) return;
-    // Suavizado: el papel no se calla de golpe entre dos movimientos del dedo.
-    this.velocidad = this.velocidad * 0.55 + velocidad * 0.45;
-    const v = Math.min(1, this.velocidad / 1.3);
-    const t = ctx.currentTime;
-    this.roce.ganancia.gain.setTargetAtTime(this.nivel * Math.pow(v, 0.75) * 0.95, t, 0.035);
-    this.roce.filtro.frequency.setTargetAtTime(1400 + 9000 * v * v, t, 0.05);
-    this.roce.fuente.playbackRate.setTargetAtTime(0.9 + 0.22 * v, t, 0.08);
+    const r = this.roce;
+    if (!ctx || !r || !this.hoja) return;
+    const p = PAPELES[this.juego];
+    const ahora = ctx.currentTime;
+    // Sube rápido y baja un poco más lento: el papel no se calla de golpe entre dos movimientos.
+    const objetivo = Math.min(1, Math.max(0, velocidad) / VELOCIDAD_PLENA);
+    r.intensidad += (objetivo - r.intensidad) * (objetivo > r.intensidad ? 0.6 : 0.35);
+    const i = r.intensidad;
+    r.agudos.frequency.setTargetAtTime(1800 + (p.brillo - 1800) * Math.pow(i, 0.7), ahora, 0.04);
+    if (i < 0.02) {
+      r.proximo = 0;
+      return;
+    }
+    // Los granos llegan al azar (como el papel), más seguidos cuanto más rápido va la hoja. Se
+    // agendan un poquito hacia adelante: si el dedo se detiene, el aire se apaga solo.
+    const hasta = ahora + 0.045;
+    const densidad = 14 + 66 * Math.pow(i, 0.8);
+    if (r.proximo < ahora) r.proximo = ahora + Math.random() / densidad;
+    while (r.proximo < hasta) {
+      this.grano(r.proximo, i);
+      r.proximo += -Math.log(1 - Math.random()) / densidad;
+    }
+    const tasa = p.crujidos * (0.3 + i);
+    if (r.proximoCrujido < ahora) r.proximoCrujido = ahora - Math.log(1 - Math.random()) / tasa;
+    while (r.proximoCrujido < hasta) {
+      const fuerza = Math.pow(Math.random(), 2) * (0.3 + 0.7 * i);
+      this.tocar(azar(this.hoja.toma), r.proximoCrujido, this.nivel * NIVEL_CRUJIDO * fuerza, p.tono * (0.9 + Math.random() * 0.5), r.entrada);
+      r.proximoCrujido += -Math.log(1 - Math.random()) / tasa;
+    }
   }
 
   pararRoce(fundido = 0.08) {
@@ -207,32 +306,35 @@ export class SonidoPapel {
     const r = this.roce;
     if (!ctx || !r) return;
     this.roce = null;
-    r.ganancia.gain.cancelScheduledValues(ctx.currentTime);
-    r.ganancia.gain.setTargetAtTime(0, ctx.currentTime, fundido / 3);
-    r.fuente.stop(ctx.currentTime + fundido + 0.05);
+    const t = ctx.currentTime;
+    r.bus.gain.cancelScheduledValues(t);
+    r.bus.gain.setValueAtTime(r.bus.gain.value, t);
+    r.bus.gain.setTargetAtTime(0, t, fundido / 3);
+    setTimeout(() => r.bus.disconnect(), (fundido + 0.3) * 1000);
   }
 
-  /** El golpecito de la hoja al asentarse. `fuerza` entre 0 y 1. */
+  /** La hoja se posa sobre las otras. `fuerza` entre 0 y 1 (menos si la hoja vuelve a su sitio). */
   golpe(fuerza = 1) {
     const ctx = this.ctx;
-    const j = this.listo();
-    if (!ctx || !j || !this.maestro || this.nivel === 0) return;
-    const fuente = ctx.createBufferSource();
-    fuente.buffer = azar(j.golpe);
-    fuente.playbackRate.value = 0.94 + Math.random() * 0.12;
-    const g = ctx.createGain();
-    g.gain.value = this.nivel * (0.35 + 0.65 * fuerza) * (0.9 + Math.random() * 0.2);
-    fuente.connect(g).connect(this.maestro);
-    fuente.start();
+    const h = this.hoja;
+    if (!ctx || !h || !this.maestro || this.nivel === 0) return;
+    const p = PAPELES[this.juego];
+    // Un poco opaco: la hoja se posa sobre las otras, no restalla.
+    const destino = ctx.createBiquadFilter();
+    destino.type = 'lowpass';
+    destino.frequency.value = p.asientoBrillo;
+    destino.Q.value = 0.5;
+    destino.connect(this.maestro);
+    setTimeout(() => destino.disconnect(), 600);
+    const nivel = this.nivel * NIVEL_ASIENTO * p.asiento * (0.25 + 0.75 * fuerza) * (0.85 + Math.random() * 0.3);
+    this.tocar(azar(h.asiento), ctx.currentTime, nivel, p.tono * (0.95 + Math.random() * 0.1), destino);
   }
 
-  /** Para «Probar sonido»: una hoja pasando, con su roce y su golpe. */
+  /** Para «Probar sonido»: una hoja pasando, con su roce y su asiento. */
   probar() {
     this.despertar();
-    const ctx = this.ctx;
-    if (!ctx) return;
-    void this.cargar(this.juego).then((j) => {
-      this.cargados.set(this.juego, j);
+    if (!this.ctx) return;
+    void this.cargarHoja().then(() => {
       this.empezarRoce();
       const inicio = performance.now();
       const paso = () => {
@@ -307,7 +409,6 @@ export class SonidoPapel {
 
   cambiarJuego(juego: JuegoSonido) {
     this.juego = juego;
-    if (this.ctx) void this.cargar(juego);
   }
 }
 

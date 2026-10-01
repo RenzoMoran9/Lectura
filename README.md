@@ -28,8 +28,11 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   el punto que tomas va pegado al dedo; hacia atrás, la hoja anterior vuelve desde el lomo. Al soltar
   solo cuenta la posición: antes de la mitad del recorrido regresa, pasada la mitad cae. Tiene luz,
   sombra sobre la página de abajo y reverso con el texto al revés, apenas visible.
-- **Sonido** (`src/sonido/`): un roce en bucle cuyo volumen y brillo siguen la velocidad de la hoja, y un
-  golpecito al asentarse. Dos juegos: «libro nuevo» y «libro antiguo».
+- **Sonido** (`src/sonido/`): hecho con grabaciones reales de un libro (CC0). Al tomar la esquina, un chasquido
+  corto; mientras la hoja cruza, granitos del roce real que se vuelven más seguidos, fuertes y brillantes con la
+  velocidad (con la hoja quieta, silencio), y algún crujido suelto; al posarse, un asiento suave. Un poco de
+  cuarto (los primeros rebotes) para que no suene pegado al oído. Dos papeles: «libro nuevo» (firme) y «libro
+  antiguo» (más seco y opaco, con más crujidos). Los trozos se arman con `scripts/sonido-hoja.py`.
 - **Papel**: la página del PDF se multiplica con una textura de ruido (`feTurbulence`); en «noche» se
   invierte la luz con un tono cálido. El PDF nunca se modifica.
 - **Recordar la página**: el avance de cada libro se guarda en IndexedDB y el libro se abre ahí.
@@ -143,8 +146,10 @@ La maqueta es `diseno/propuesta-visual.html` (ábrela en el navegador). Para vol
 - [PDF.js](https://github.com/mozilla/pdf.js) (`pdfjs-dist`): Apache-2.0. Sus recursos (mapas de caracteres,
   fuentes estándar, módulos wasm) se publican en `pdfjs/` con sus licencias.
 - React, Zustand e idb: licencia MIT.
-- Sonidos (`public/sonidos/`) y sonidos de fondo (`public/ambiente/`): generados con ElevenLabs para este proyecto;
-  ver `public/sonidos/LICENCIA.md` y `public/ambiente/LICENCIA.md`.
+- Sonido de la hoja (`public/sonidos/hoja.wav`): grabaciones reales del paquete «RPG Audio» de
+  [Kenney](https://kenney.nl/assets/rpg-audio), CC0 1.0. Sonidos al marcar (`public/sonidos/`) y de fondo
+  (`public/ambiente/`): generados con ElevenLabs para este proyecto. Ver `public/sonidos/LICENCIA.md` y
+  `public/ambiente/LICENCIA.md`.
 - Libro de muestra (`public/muestra/`): texto de Cervantes (dominio público) compuesto con EB Garamond (OFL 1.1).
 - Íconos de la app (`public/icono.svg`, `public/iconos/`): propios.
 - Portadas de internet: se muestran desde [Open Library](https://openlibrary.org/dev/docs/api/covers) y
