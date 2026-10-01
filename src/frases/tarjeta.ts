@@ -1,9 +1,9 @@
 // Tarjetas para compartir una frase: la frase dentro de un marco, en formato de estado de WhatsApp o
-// de historia (1080 × 1920). Se dibujan en un lienzo con lo mismo que usa la app: la letra, el
-// papel, el resaltador o el lápiz con que la marqué, y el libro y la página abajo.
+// de historia (1080 × 1920). Se dibuja solo el texto, bien escrito (sin el resaltador ni el lápiz
+// con que la marqué), con el libro y la página abajo.
 
-import { azar, lazoAlrededor } from './dibujo';
-import { esLapiz, LAPICES, RESALTADORES, type Frase } from './modelo';
+import { azar } from './dibujo';
+import { esLapiz, RESALTADORES, type Frase } from './modelo';
 
 export type Marco = 'clasico' | 'antiguo' | 'noche' | 'cuaderno' | 'flor';
 
@@ -23,6 +23,36 @@ export interface DatosTarjeta {
   autor?: string;
   /** El recorte de la página, si la frase es de un PDF escaneado (sin texto). */
   imagen?: CanvasImageSource | null;
+  /** El texto, si lo corregí antes de compartir (si no, el de la frase, ordenado). */
+  texto?: string;
+}
+
+/** Las palabras de una sola letra que existen en español (las demás sueltas son restos de un corte). */
+const LETRA_SOLA = /^[aeouyAEOUY]$/;
+
+/**
+ * El texto de la frase bien escrito para la tarjeta: sin espacios de más, sin letras sueltas
+ * («C A P Í T U L O» → «CAPÍTULO»), sin restos de palabras cortadas al marcar, y con puntos
+ * suspensivos donde la frase empieza o termina a mitad de una oración.
+ */
+export function textoBonito(texto: string): string {
+  // Letras espaciadas (títulos, capitulares): cuatro o más letras sueltas seguidas forman una
+  // palabra (un espacio doble separa una palabra de otra).
+  let t = texto.replace(/(?:^|(?<=\s))(?:\p{L} ){3,}\p{L}(?=\s|$|[,.;:])/gu, (m) => m.replace(/ /g, ''));
+  t = t.replace(/\s+/g, ' ').trim();
+  // Palabras cortadas con guion al final del renglón («pala- bra» → «palabra»).
+  t = t.replace(/(\p{Ll})[-‐­] (\p{Ll})/gu, '$1$2');
+  // Una letra suelta al principio que no es palabra (la capitular perdida de «En un lugar…»).
+  t = t.replace(/^[«"“(—–-]*\s*/u, '');
+  const primera = t.split(' ')[0];
+  if (/^\p{L}$/u.test(primera) && !LETRA_SOLA.test(primera)) t = t.slice(primera.length).trim();
+  t = t.replace(/[\s—–-]+$/u, '');
+  if (!t) return '';
+  // Empieza a mitad de oración (minúscula) o termina sin punto: puntos suspensivos.
+  if (/^\p{Ll}/u.test(t)) t = `…${t}`;
+  if (/[,;:]$/.test(t)) t = t.slice(0, -1);
+  if (!/[.!?…»"”)]$/.test(t)) t = `${t}…`;
+  return t;
 }
 
 type Ctx = CanvasRenderingContext2D;
@@ -124,24 +154,6 @@ function acomodar(ctx: Ctx, texto: string, e: Estilo) {
     mejor.lineas[caben - 1] = mejor.lineas[caben - 1].replace(/[\s,;:.]*\S*$/, '') + '…';
   }
   return mejor;
-}
-
-/** Un trazo de resaltador detrás de un renglón, con bordes de marcador. */
-function resaltar(ctx: Ctx, x0: number, x1: number, base: number, px: number, rgb: number[], rnd: () => number, oscuro: boolean) {
-  const arriba = oscuro ? base - px * 0.06 : base - px * 0.78;
-  const abajo = base + px * (oscuro ? 0.2 : 0.2);
-  const pasos = Math.max(3, Math.round((x1 - x0) / 60));
-  ctx.save();
-  ctx.globalCompositeOperation = oscuro ? 'source-over' : 'multiply';
-  ctx.fillStyle = `rgba(${rgb.join(',')},${oscuro ? 0.5 : 0.62})`;
-  ctx.beginPath();
-  ctx.moveTo(x0 - 10, arriba + (rnd() - 0.5) * 8);
-  for (let k = 1; k <= pasos; k++) ctx.lineTo(x0 + ((x1 - x0) * k) / pasos, arriba + (rnd() - 0.5) * 7);
-  ctx.quadraticCurveTo(x1 + 16, (arriba + abajo) / 2, x1 + 8, abajo + (rnd() - 0.5) * 6);
-  for (let k = pasos - 1; k >= 0; k--) ctx.lineTo(x0 + ((x1 - x0) * k) / pasos, abajo + (rnd() - 0.5) * 7);
-  ctx.quadraticCurveTo(x0 - 18, (arriba + abajo) / 2, x0 - 10, arriba);
-  ctx.fill();
-  ctx.restore();
 }
 
 function centrado(ctx: Ctx, texto: string, y: number, letra: string, color: string, espaciado = 0) {
@@ -339,17 +351,19 @@ const ESTILOS: Record<Marco, Estilo> = {
         ctx.arc(x, y, 1 + rnd() * 2.2, 0, Math.PI * 2);
         ctx.fill();
       }
-      // Media luna.
-      ctx.save();
-      ctx.fillStyle = '#D9BF86';
-      ctx.beginPath();
-      ctx.arc(ANCHO / 2, 300, 46, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.beginPath();
-      ctx.arc(ANCHO / 2 + 22, 286, 42, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      // Media luna (se recorta en un lienzo aparte, para no agujerear el fondo).
+      const luna = document.createElement('canvas');
+      luna.width = luna.height = 100;
+      const l = luna.getContext('2d')!;
+      l.fillStyle = '#D9BF86';
+      l.beginPath();
+      l.arc(50, 50, 46, 0, Math.PI * 2);
+      l.fill();
+      l.globalCompositeOperation = 'destination-out';
+      l.beginPath();
+      l.arc(72, 36, 42, 0, Math.PI * 2);
+      l.fill();
+      ctx.drawImage(luna, ANCHO / 2 - 50, 250);
       // Filete dorado.
       ctx.strokeStyle = 'rgba(201,168,106,.55)';
       ctx.lineWidth = 2;
@@ -557,7 +571,7 @@ export function dibujarTarjeta(lienzo: HTMLCanvasElement, f: Frase, d: DatosTarj
   e.fondo(ctx, rnd);
 
   let fin = e.caja.y + e.caja.h / 2;
-  const texto = f.texto.replace(/\s+/g, ' ').trim();
+  const texto = d.texto != null ? d.texto.replace(/\s+/g, ' ').trim() : textoBonito(f.texto);
   if (texto) {
     const { px, lineas } = acomodar(ctx, texto, e);
     const alto = px * e.renglon;
@@ -571,33 +585,10 @@ export function dibujarTarjeta(lienzo: HTMLCanvasElement, f: Frase, d: DatosTarj
       const x = e.alinear === 'center' ? ANCHO / 2 - w / 2 : e.caja.x;
       return { l: x, r: x + w, t: base(i) - px * 0.78, b: base(i) + px * 0.22 };
     });
-    // La marca con que guardé la frase: resaltador detrás del texto; el lápiz, alrededor.
-    if (!esLapiz(f.color)) caja.forEach((c, i) => resaltar(ctx, c.l, c.r, base(i), px, RESALTADORES[f.color as keyof typeof RESALTADORES].rgb, rnd, !!e.oscuro));
     ctx.font = e.letra(px);
     ctx.fillStyle = e.tinta;
     ctx.textAlign = 'left';
     lineas.forEach((l, i) => ctx.fillText(l, caja[i].l, base(i)));
-    if (esLapiz(f.color)) {
-      const k = 2.4; // el lazo se calcula a escala de pantalla y se agranda
-      const d2 = lazoAlrededor(
-        caja.map((c) => ({ l: c.l / k, r: c.r / k, t: c.t / k, b: c.b / k })),
-        f.id,
-      );
-      const color = e.oscuro && f.color === 'grafito' ? '#CFC6B8' : LAPICES[f.color].hex;
-      ctx.save();
-      ctx.scale(k, k);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.strokeStyle = color;
-      ctx.globalAlpha = 0.9;
-      ctx.lineWidth = 1.7;
-      ctx.stroke(new Path2D(d2));
-      ctx.globalAlpha = 0.35;
-      ctx.lineWidth = 0.8;
-      ctx.translate(0.6, 0.5);
-      ctx.stroke(new Path2D(d2));
-      ctx.restore();
-    }
     if (e.sobreTexto) {
       ctx.save();
       e.sobreTexto(ctx, base(0) - px * 0.8);

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAjustes } from '../estado/ajustes';
 import { useLibros } from '../estado/libros';
 import type { Frase } from '../frases/modelo';
-import { cargarLetras, dibujarTarjeta, MARCOS, type DatosTarjeta, type Marco } from '../frases/tarjeta';
+import { cargarLetras, dibujarTarjeta, MARCOS, textoBonito, type DatosTarjeta, type Marco } from '../frases/tarjeta';
 import { Icono } from './Icono';
 
 const NOMBRE = 'Entre Hojas - frase.jpg';
@@ -47,6 +47,9 @@ export function CompartirFrase({ f, alCerrar }: { f: Frase; alCerrar: () => void
   const [miniaturas, setMiniaturas] = useState<Partial<Record<Marco, string>>>({});
   const [imagen, setImagen] = useState<Blob | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  // El texto de la tarjeta se puede corregir antes de compartir (no cambia la frase guardada).
+  const [editando, setEditando] = useState(false);
+  const [borrador, setBorrador] = useState(() => textoBonito(f.texto));
   const lienzo = useRef<HTMLCanvasElement>(null);
 
   // Las letras y, si la frase es de una página escaneada, su recorte.
@@ -61,6 +64,13 @@ export function CompartirFrase({ f, alCerrar }: { f: Frase; alCerrar: () => void
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f.id]);
+
+  // Lo que escribo pasa a la tarjeta cuando dejo de teclear un momento.
+  useEffect(() => {
+    if (!editando) return;
+    const t = setTimeout(() => setDatos((d) => (d && d.texto !== borrador ? { ...d, texto: borrador } : d)), 350);
+    return () => clearTimeout(t);
+  }, [borrador, editando]);
 
   // La vista previa (y la imagen ya lista, para compartir al tiro: algunos teléfonos solo dejan
   // compartir si el toque es reciente).
@@ -139,6 +149,37 @@ export function CompartirFrase({ f, alCerrar }: { f: Frase; alCerrar: () => void
         <div className="compartir-vista">
           <canvas ref={lienzo} aria-label={`Vista previa con el marco ${MARCOS.find((m) => m.id === marco)?.nombre}`} />
         </div>
+        {!!f.texto.trim() &&
+          (editando ? (
+            <div className="compartir-editar">
+              <textarea
+                value={borrador}
+                rows={3}
+                aria-label="Texto de la tarjeta"
+                onChange={(e) => setBorrador(e.target.value)}
+                onKeyDown={(e) => e.stopPropagation()}
+              />
+              <div className="compartir-editar-botones">
+                <button
+                  className="enlace-chico"
+                  onClick={() => {
+                    const original = textoBonito(f.texto);
+                    setBorrador(original);
+                    setDatos((d) => d && { ...d, texto: undefined });
+                  }}
+                >
+                  Como estaba
+                </button>
+                <button className="enlace-chico" onClick={() => setEditando(false)}>
+                  Listo
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button className="compartir-lapiz" onClick={() => setEditando(true)}>
+              <Icono nombre="lapiz" tam={14} /> Corregir el texto
+            </button>
+          ))}
         <div className="marcos" role="radiogroup" aria-label="Marco">
           {MARCOS.map((m) => (
             <button key={m.id} className={`marco ${marco === m.id ? 'sel' : ''}`} role="radio" aria-checked={marco === m.id} onClick={() => elegir(m.id)}>
