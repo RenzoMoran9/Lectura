@@ -14,6 +14,8 @@ interface EstadoFrases {
   quitar: (ids: string[]) => Promise<Frase[]>;
   restaurar: (fs: Frase[]) => Promise<void>;
   usar: (h: Herramienta | null) => void;
+  /** Cambia una frase (su nota, su repaso) y la guarda. */
+  actualizar: (id: string, cambios: Partial<Frase>) => Promise<void>;
 }
 
 export const useFrases = create<EstadoFrases>()((set, get) => ({
@@ -44,4 +46,12 @@ export const useFrases = create<EstadoFrases>()((set, get) => ({
   },
 
   usar: (herramienta) => set({ herramienta }),
+
+  actualizar: async (id, cambios) => {
+    const f = get().frases.find((x) => x.id === id);
+    if (!f) return;
+    const nueva = { ...f, ...cambios };
+    set((s) => ({ frases: s.frases.map((x) => (x.id === id ? nueva : x)) }));
+    await guardarFrase(nueva);
+  },
 }));

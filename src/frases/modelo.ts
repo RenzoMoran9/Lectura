@@ -50,7 +50,13 @@ export interface Frase {
   trazo?: Punto[]; // lápiz, o resaltado a mano en páginas escaneadas
   grosor?: number; // ancho del resaltado a mano, en unidades de la página
   creada: number;
+  /** Una nota corta mía sobre la frase (hasta 280 letras). */
+  nota?: string;
+  /** Repaso del día: en qué caja va (0 = recién guardada) y cuándo toca repasarla. */
+  repaso?: { caja: number; proxima: number };
 }
+
+export const NOTA_MAX = 280;
 
 export const nuevoId = () =>
   (crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`).replace(/-/g, '');

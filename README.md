@@ -96,6 +96,21 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   hasta la mañana), o a mano con «Brillo» y «Tibieza» en «Papel y sonido».
 - **Grosor del libro** en la PC: los cantos de las hojas a cada lado crecen y se adelgazan mientras avanzas.
 
+## Escuchar y repasar
+
+- **Leer en voz alta** (`src/lectura/voz.ts`): el botón de audífonos (arriba, al tocar la hoja) lee la página con las
+  voces en español del sistema, desde el marcador o desde lo que se ve. La oración que se lee se ilumina; con zoom o
+  de lado, la vista la sigue. Al terminar la página, la hoja pasa sola con su sonido (en la PC, primero la de la
+  derecha). Abajo: pausa, velocidad (0,8×, 1×, 1,2×, 1,5×), la voz (se elige tocando su nombre) y cerrar. Si pasas la
+  hoja o saltas a otra página, sigue leyendo desde ahí. Las páginas sin texto (escaneadas) avisan que no se pueden leer.
+- **Repaso del día** (`src/frases/repaso.ts`, `src/ui/RepasoDiario.tsx`): «Para recordar hoy» dice cuántas frases te
+  tocan (hasta 10 al día). Tarjeta por tarjeta: «La recordaba» la manda a 3, 7, 14, 30 y 60 días; «Repasar de nuevo»,
+  a mañana. Al terminar, los días seguidos que llevas.
+- **Nota en una frase** (`src/ui/NotaFrase.tsx`): «✎ Nota» en cada tarjeta de Mis frases (hasta 280 letras); se
+  guarda al salir del cuadro o con Enter, y aparece también en el repaso y en el panel de la PC.
+- **Exportar** (`src/frases/exportar.ts`): descarga las frases que se ven (con el buscador y los filtros puestos) en
+  un archivo `.txt`, agrupadas por libro y por página, con su color y su nota.
+
 ## Desarrollo
 
 ```bash

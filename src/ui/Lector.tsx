@@ -2,7 +2,7 @@
 // recuerdo de la página. En el celular, una página a la vez; en pantallas anchas, el libro abierto
 // a doble página sobre la mesa, con barras fijas y el panel de Mis frases.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { leerArchivo } from '../datos/archivos';
 import { guardarAvance, leerAvance, obtenerLibro, type Avance, type Libro } from '../datos/bd';
 import { useAjustes } from '../estado/ajustes';
@@ -33,6 +33,7 @@ import { capituloDe, leerCapitulos, type Capitulo } from '../pdf/indice';
 import type { TipoTrazo } from '../sonido/sonido';
 import { coincidencias } from '../lectura/buscar';
 import { luzActual } from '../lectura/luz';
+import { hayVoz, LecturaEnVoz, nombresVoces, oracionDesdeAltura, oracionEn, vocesEnEspanol, type EstadoVoz } from '../lectura/voz';
 import { abrirPdf, bytesLeidos, cerrarPdf, type DocumentoPdf } from '../pdf/pdf';
 import { Paginas } from '../pdf/paginas';
 import { ambiente } from '../sonido/ambiente';
@@ -66,6 +67,8 @@ type Donde = 'arriba' | 'abajo' | { px: number; py: number };
 type Rango = { x0: number; y0: number; x1: number; y1: number };
 const BARRA_ARRIBA = 52;
 const BARRA_ABAJO = 56;
+/** Velocidades de la lectura en voz alta (se cambian tocando «1×»). */
+const VELOCIDADES = [0.8, 1, 1.2, 1.5];
 
 export function Lector({ libroId, paginaPedida, desde }: { libroId: string; paginaPedida?: number; desde?: 'inicio' | 'frases' }) {
   const volver = useLibros((s) => s.volver);
@@ -100,6 +103,12 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const [pasando, setPasando] = useState(false);
   const [destellos, setDestellos] = useState<{ rects: { x: number; y: number; w: number; h: number }[]; clave: number } | null>(null);
   const [buscarAbierto, setBuscarAbierto] = useState(false);
+  /** Lectura en voz alta: qué oración se lee y en qué página (null: no se está leyendo). */
+  const [voz, setVoz] = useState<EstadoVoz | null>(null);
+  const [voces, setVoces] = useState<SpeechSynthesisVoice[]>([]);
+  const vozGuardada = useAjustes((s) => s.voz);
+  const velocidadVoz = useAjustes((s) => s.velocidadVoz);
+  const boton = useAjustes((s) => s.boton);
   const luzAuto = useAjustes((s) => s.luzAuto);
   const brillo = useAjustes((s) => s.brillo);
   const tibieza = useAjustes((s) => s.tibieza);
@@ -138,6 +147,12 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const borradasGesto = useRef<Frase[]>([]);
   /** Página en la que se está marcando (en doble página puede ser la izquierda o la derecha). */
   const marcaPagina = useRef<{ indice: number; rect: Caja } | null>(null);
+  const lecturaVoz = useRef<LecturaEnVoz | null>(null);
+  const vozRef = useRef<EstadoVoz | null>(null);
+  const vocesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const capaVoz = useRef<HTMLDivElement>(null);
+  /** Cuenta como actividad (la pantalla no se apaga): tocar, o que la voz siga leyendo. */
+  const actividadRef = useRef(() => {});
 
   const archivoRef = useRef<Blob | null>(null);
   const docActual = useRef<DocumentoPdf | null>(null);
@@ -316,6 +331,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     transformar(sombraLibro.current, dispRef.current?.libro);
     transformar(lienzoPrevia.current, marcaPagina.current?.rect ?? dispRef.current?.hoja);
     ubicarCintaRef.current();
+    ubicarVozRef.current();
     // La altura a la que voy en la página: se recuerda al salir, aunque la hoja siga deslizándose.
     const cy = vistaCyRef.current();
     if (cy !== undefined) cyRef.current = cy;
@@ -479,6 +495,29 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   };
   const ubicarCintaRef = useRef(ubicarCinta);
   ubicarCintaRef.current = ubicarCinta;
+
+  /** La oración que se lee en voz alta, iluminada sobre la página (sigue al zoom). */
+  const ubicarVoz = () => {
+    const capa = capaVoz.current;
+    if (!capa) return;
+    const e = vozRef.current;
+    const hijos = capa.children as HTMLCollectionOf<HTMLElement>;
+    for (let k = 0; k < hijos.length; k++) {
+      const rango = e?.rangos[k];
+      const r = e && rango ? rectMarcaPantalla({ pagina: e.pagina, ...rango }) : null;
+      const h = hijos[k];
+      if (!r) {
+        h.style.display = 'none';
+        continue;
+      }
+      h.style.display = '';
+      h.style.transform = `translate(${r.x - 3}px, ${r.y - 2}px)`;
+      h.style.width = `${r.w + 6}px`;
+      h.style.height = `${r.h + 4}px`;
+    }
+  };
+  const ubicarVozRef = useRef(ubicarVoz);
+  ubicarVozRef.current = ubicarVoz;
 
   /** Al llegar a la página del marcador (o de lo buscado), esa línea brilla un momento. */
   const mostrarDestello = () => {
@@ -690,7 +729,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         if (paso) {
           // El ritmo: cuánto tardé en leer la página que acabo de pasar.
           const ahora = performance.now();
-          if (s === 'adelante') {
+          // (Mientras la voz lee, no: ese no es mi ritmo de lectura.)
+          if (s === 'adelante' && !lecturaVoz.current?.activa) {
             ritmoRef.current = sumarAlRitmo(ritmoRef.current, (ahora - inicioPagina.current) / 1000 / (esDoble() ? 2 : 1));
             setRitmo(ritmoRef.current);
           }
@@ -1090,11 +1130,13 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       } else soltar();
     };
     actividad();
+    actividadRef.current = actividad;
     document.addEventListener('visibilitychange', alCambiar);
     window.addEventListener('pointerdown', actividad, true);
     window.addEventListener('keydown', actividad, true);
     return () => {
       vivo = false;
+      actividadRef.current = () => {};
       clearTimeout(quieto);
       soltar();
       document.removeEventListener('visibilitychange', alCambiar);
@@ -1353,6 +1395,126 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     mostrarDestello();
   };
 
+  // ---------- 6. Lectura en voz alta ----------
+  // Las voces en español del sistema (llegan de a poco: se escuchan los cambios).
+  useEffect(() => {
+    if (!hayVoz()) return;
+    const s = window.speechSynthesis;
+    const cargar = () => {
+      const vs = vocesEnEspanol(s.getVoices(), navigator.language);
+      vocesRef.current = vs;
+      setVoces(vs);
+    };
+    cargar();
+    s.addEventListener?.('voiceschanged', cargar);
+    return () => s.removeEventListener?.('voiceschanged', cargar);
+  }, []);
+
+  const vozElegida = () => {
+    const vs = vocesRef.current;
+    const guardada = useAjustes.getState().voz;
+    return vs.find((v) => v.voiceURI === guardada) ?? vs[0];
+  };
+
+  /** El texto de una página para leerlo en voz alta, con la medida de la página (sus unidades). */
+  const textoParaVoz = async (i: number) => {
+    const d = docActual.current;
+    if (!d) return null;
+    const pg = await d.getPage(i + 1);
+    const vista = pg.getViewport({ scale: 1 });
+    const guardado = textos.current.get(i);
+    const t = guardado && guardado !== 'leyendo' ? guardado : await leerTextoPagina(pg);
+    textos.current.set(i, t);
+    return { texto: t, ancho: vista.width, alto: vista.height };
+  };
+
+  /** Con la vista movible (zoom o de lado): a qué altura de la página está el borde de arriba. */
+  const alturaArriba = (): number | undefined => {
+    const d = dispRef.current;
+    const v = vistaTam();
+    if (!d || !v || d.modo === 'doble' || !sePuedeMover()) return undefined;
+    const r = paginas.current?.rectPagina(paginaRef.current) ?? d.caja;
+    const y = aLienzo(zoomRef.current, v.w / 2, margenesSeguros().arriba + 4).y;
+    return Math.max(0, Math.min(1, (y - d.hoja.y - r.y) / r.h));
+  };
+
+  /**
+   * Leer en voz alta desde el marcador (si está en estas páginas), desde lo que se ve (con zoom o
+   * de lado) o desde arriba. Al terminar la página, la hoja pasa sola y se sigue leyendo.
+   */
+  const leerEnVoz = () => {
+    if (!hayVoz()) {
+      setMensaje({ texto: 'Este navegador no puede leer en voz alta.', clave: Date.now() });
+      return;
+    }
+    let l = lecturaVoz.current;
+    if (!l) {
+      l = new LecturaEnVoz({
+        texto: textoParaVoz,
+        visibles,
+        total: () => totalRef.current,
+        pasar: () => pasador.current?.pasarSola('adelante'),
+        voz: vozElegida,
+        velocidad: () => useAjustes.getState().velocidadVoz,
+        alCambiar: (e) => {
+          vozRef.current = e;
+          setVoz(e);
+        },
+        alAviso: (texto) => setMensaje({ texto, clave: Date.now() }),
+        alHablar: () => actividadRef.current(),
+      });
+      lecturaVoz.current = l;
+    }
+    setCromo(false);
+    sonido.despertar();
+    const vis = visibles();
+    const m = marcadorRef.current;
+    const marca = m && vis.includes(m.pagina) ? m : null;
+    const arriba = marca ? undefined : alturaArriba();
+    l.empezar(marca?.pagina ?? vis[0] ?? paginaRef.current, (t, ors) => {
+      if (marca) return oracionEn(ors, letraEn(t.texto, marca.x0 * t.ancho + 2, ((marca.y0 + marca.y1) / 2) * t.alto, 40));
+      return arriba != null ? oracionDesdeAltura(t.texto, ors, t.alto, arriba) : 0;
+    });
+  };
+
+  /** Con zoom o de lado: si la oración que se lee queda fuera de la vista, la vista va hacia ella. */
+  const seguirVoz = (e: EstadoVoz) => {
+    const v = vistaTam();
+    if (!e.rangos.length || !v || !sePuedeMover() || gestos.current?.ocupado || pasador.current?.ocupado) return;
+    const a = rectMarcaPantalla({ pagina: e.pagina, ...e.rangos[0] });
+    const b = rectMarcaPantalla({ pagina: e.pagina, ...e.rangos[e.rangos.length - 1] });
+    if (!a || !b) return;
+    const s = margenesSeguros();
+    const arriba = s.arriba + 16;
+    const abajo = v.h - s.abajo - 100; // sobre el reproductor
+    if (a.y >= arriba && b.y + b.h <= abajo) return;
+    const z = zoomRef.current;
+    ponerZoom({ ...z, y: z.y + arriba + (abajo - arriba) * 0.15 - a.y }, true);
+  };
+
+  useLayoutEffect(() => {
+    ubicarVoz();
+    if (voz?.fase === 'leyendo') seguirVoz(voz);
+    // ubicarVoz y seguirVoz leen refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voz]);
+
+  // La página cambió (la pasó la voz, la pasé yo o salté a otra): se sigue leyendo desde ahí.
+  useEffect(() => {
+    lecturaVoz.current?.cambioDePagina();
+  }, [pagina]);
+
+  // Al salir del libro, la voz se calla.
+  useEffect(() => () => lecturaVoz.current?.detener(), []);
+
+  const cambiarVelocidad = () => {
+    const i = VELOCIDADES.indexOf(velocidadVoz);
+    useAjustes.getState().poner({ velocidadVoz: VELOCIDADES[(i + 1) % VELOCIDADES.length] });
+    lecturaVoz.current?.repetir();
+  };
+  const vozActual = voces.find((v) => v.voiceURI === vozGuardada) ?? voces[0];
+  const nombres = nombresVoces(voces);
+
   const total = doc?.numPages ?? 0;
   const noche = papel === 'noche';
   const mostrada = saltoA ?? pagina ?? 0;
@@ -1374,7 +1536,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
 
   return (
     <div
-      className={`lector ${enMesa ? 'en-mesa' : ''} ${disp?.modo === 'doble' ? 'en-doble' : ''} ${hayZoom ? 'con-zoom' : ''} ${pasando ? 'pasando' : ''} papel-fondo-${papel}`}
+      className={`lector ${enMesa ? 'en-mesa' : ''} ${disp?.modo === 'doble' ? 'en-doble' : ''} ${hayZoom ? 'con-zoom' : ''} ${pasando ? 'pasando' : ''} ${voz ? 'con-voz' : ''} papel-fondo-${papel}`}
     >
       <div
         ref={contenedor}
@@ -1413,6 +1575,10 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
             aria-hidden="true"
           />
         ))}
+        {/* La oración que lee la voz, iluminada (un rectángulo por renglón; se ubican al hacer zoom). */}
+        <div ref={capaVoz} className={`capa-voz ${voz?.fase === 'pausa' ? 'en-pausa' : ''}`} aria-hidden="true">
+          {voz?.rangos.map((_, k) => <div key={k} className="voz-frase" style={{ display: 'none' }} />)}
+        </div>
         {/* Luz del papel: de noche, más cálida y tenue (como bajo una lámpara). */}
         <div className="luz-papel" style={{ opacity: luz.tibieza * 0.34 }} aria-hidden="true" />
         <div className="luz-tenue" style={{ opacity: (1 - luz.brillo) * 0.9 }} aria-hidden="true" />
@@ -1433,6 +1599,15 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           <Icono nombre="chevron-left" tam={20} /> {desde === 'frases' ? 'Mis frases' : 'Estante'}
         </button>
         <div className="cromo-titulo">{enMesa ? tituloBarra : libro?.titulo}</div>
+        <button
+          className={`icono-barra ${voz ? 'on' : ''}`}
+          onClick={() => (voz ? lecturaVoz.current?.detener() : leerEnVoz())}
+          aria-label={voz ? 'Dejar de leer en voz alta' : 'Leer en voz alta'}
+          aria-pressed={!!voz}
+          title="Leer en voz alta"
+        >
+          <Icono nombre="audifonos" tam={19} />
+        </button>
         <button className="icono-barra" onClick={() => setBuscarAbierto(true)} aria-label="Buscar en el libro" title="Buscar en el libro">
           <Icono nombre="search" tam={19} />
         </button>
@@ -1515,6 +1690,56 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         >
           {disp?.modo !== 'doble' ? 'Ajustar al texto' : 'Tamaño normal'}
         </button>
+      )}
+
+      {voz && (
+        <div
+          className={`voz-zona ${cromo && !enMesa ? 'sobre-cromo' : ''} ${enMesa ? 'en-mesa' : ''} ${boton.y > 0.7 ? `libre-${boton.lado}` : ''}`}
+          style={conPanel ? { right: PANEL } : undefined}
+        >
+          <div className="voz-alta" role="region" aria-label="Lectura en voz alta">
+            <button
+              className="voz-boton"
+              onClick={() => (voz.fase === 'pausa' ? lecturaVoz.current?.seguir() : lecturaVoz.current?.pausar())}
+              aria-label={voz.fase === 'pausa' ? 'Seguir leyendo' : 'Pausar'}
+            >
+              <Icono nombre={voz.fase === 'pausa' ? 'play' : 'pausa'} tam={19} />
+            </button>
+            <div className="voz-textos">
+              <b>{voz.fase === 'pausa' ? 'En pausa' : voz.fase === 'pasando' ? 'Pasando la hoja…' : 'Leyendo en voz alta'}</b>
+              <span className="voz-sub">
+                Pág. {miles(voz.pagina + 1)} ·{' '}
+                {vozActual ? (
+                  <label className="voz-elegir">
+                    {nombres[voces.indexOf(vozActual)]}
+                    <select
+                      value={vozActual.voiceURI}
+                      aria-label="Voz"
+                      onChange={(e) => {
+                        useAjustes.getState().poner({ voz: e.target.value });
+                        lecturaVoz.current?.repetir();
+                      }}
+                    >
+                      {voces.map((v, k) => (
+                        <option key={v.voiceURI} value={v.voiceURI}>
+                          {nombres[k]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  'voz del sistema'
+                )}
+              </span>
+            </div>
+            <button className="voz-vel" onClick={cambiarVelocidad} aria-label={`Velocidad: ${velocidadVoz.toLocaleString('es')}×. Tocar para cambiar`}>
+              {velocidadVoz.toLocaleString('es')}×
+            </button>
+            <button className="voz-cerrar" onClick={() => lecturaVoz.current?.detener()} aria-label="Dejar de leer">
+              <Icono nombre="x" tam={18} />
+            </button>
+          </div>
+        </div>
       )}
 
       {doc && (

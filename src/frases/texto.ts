@@ -155,7 +155,7 @@ export function seleccionar(t: TextoPagina, a: number, b: number): Seleccion | n
 }
 
 /** Un rectángulo por renglón, sin los blancos de las puntas. */
-function rectangulos(t: TextoPagina, i: number, j: number): Rect[] {
+export function rectangulos(t: TextoPagina, i: number, j: number): Rect[] {
   const rects: Rect[] = [];
   let actual: { linea: number; x0: number; x1: number; top: number; bottom: number } | null = null;
   const cerrar = () => {

@@ -42,6 +42,9 @@ La uso sobre todo desde el celular, y también desde la computadora.
 8. **Índice y cuánto falta.** El índice del PDF (si lo trae) con el marcador arriba, los capítulos leídos marcados y el actual con su avance. Abajo, el tiempo que me falta para terminar el capítulo y el libro, según mi ritmo de lectura.
 9. **La pantalla no se apaga** mientras leo (sí, si nadie la toca en 10 minutos).
 10. **Buscar en el libro** una palabra o frase, sin importar tildes ni mayúsculas: resultados con página, capítulo y fragmento; al tocar uno, la palabra brilla y puedo volver a donde iba.
+11. **Leer en voz alta.** Botón de audífonos arriba. Lee desde el marcador (o desde lo que se ve), ilumina la oración que lee y, al terminar la página, la hoja pasa sola con su sonido. Pausa, velocidad (0,8× a 1,5×) y voz en español del sistema. Si paso la hoja yo, sigue desde ahí.
+12. **Repaso del día, tipo tarjetas.** «Para recordar hoy» avisa cuántas frases tocan. Las que recuerdo vuelven en 3, 7, 14… días; las otras, mañana. Cuenta los días seguidos.
+13. **Nota en una frase** (corta, hasta 280 letras) y **exportar Mis frases** en un archivo de texto, agrupadas por libro.
 
 ## Lo que NO va (por ahora)
 Tienda de libros, botones de compartir, notas largas, conversión a EPUB y reacomodar el texto del PDF.
@@ -131,6 +134,7 @@ Pantallas:
   - Doble toque: el texto a todo el ancho de la pantalla (se recortan los márgenes blancos, sin cortar el texto) o vuelve a la página entera. Un pellizco que queda cerca de ese ancho se acomoda justo en él.
   - Celular de lado: la página va a todo el ancho y se lee deslizando hacia abajo.
   - Dedo quieto medio segundo (en modo lectura): pone el marcador en esa línea; sobre el marcador, lo quita.
+- **Voz alta:** con las voces del sistema (`speechSynthesis`), sin servicios externos. Se lee por oraciones (las muy largas se cortan en una coma) y se saltan los números de página y los encabezados en letra chica. Mientras la voz lee, la pantalla no se apaga y esas páginas no cuentan para mi ritmo de lectura.
 - **PDFs escaneados (sin texto):** se leen igual. Lo que se resalte o encierre se guarda como recorte de imagen. El reconocimiento de texto (OCR) queda para más adelante.
 - **Celular:** una página a la vez.
 - **PC o tablet en horizontal:** doble página, las flechas ← → pasan la hoja con el mismo sonido y Mis frases va en un panel lateral.
@@ -165,8 +169,5 @@ Pantallas:
 - Recursos gráficos y sonidos: propios o de licencia libre, con su licencia anotada.
 
 ## Extras (solo si sobra tiempo)
-- Repaso diario de frases, tipo tarjetas.
-- Notas en una frase.
-- Exportar mis frases.
 - OCR para PDFs escaneados.
 - Marcadores del PDF (el índice ya está).

@@ -6,7 +6,9 @@ import { useFrases } from '../estado/frases';
 import { useLibros } from '../estado/libros';
 import { colorCss, lazoAlrededor } from '../frases/dibujo';
 import { COLORES_LAPIZ, COLORES_RESALTADOR, esLapiz, LAPICES, rgbDe, type ColorMarca, type Frase } from '../frases/modelo';
+import { descargar, textoParaExportar } from '../frases/exportar';
 import { Icono } from './Icono';
+import { NotaFrase } from './NotaFrase';
 import { Pestanas } from './Pestanas';
 
 const sinAcentos = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -112,6 +114,7 @@ export function Repasar({ frases, alCerrar, alIr }: { frases: Frase[]; alCerrar:
           <p className="q">
             <TextoFrase f={f} />
           </p>
+          <NotaFrase f={f} editando={false} alTerminar={() => {}} />
           <div className="repasar-meta">
             {titulo} · pág. {f.pagina + 1} · {cuando(f.creada)}
           </div>
@@ -142,6 +145,7 @@ export function MisFrases({ libroId }: { libroId?: string }) {
   const [filtroColor, setFiltroColor] = useState<ColorMarca | null>(null);
   const [verColores, setVerColores] = useState(false);
   const [repasando, setRepasando] = useState(false);
+  const [notaDe, setNotaDe] = useState<string | null>(null);
 
   const tituloDe = (id: string, f?: Frase) => libros.find((l) => l.id === id)?.titulo ?? f?.libroTitulo ?? 'Libro';
   const enEstante = (id: string) => libros.some((l) => l.id === id);
@@ -171,6 +175,14 @@ export function MisFrases({ libroId }: { libroId?: string }) {
     .filter((g) => g.frases.length);
 
   const ir = (f: Frase) => enEstante(f.libroId) && abrir(f.libroId, f.pagina);
+  /** Descarga las frases que se ven (con el buscador y los filtros puestos), agrupadas por libro. */
+  const exportar = () => {
+    const texto = textoParaExportar(filtradas, (id) => {
+      const l = libros.find((x) => x.id === id);
+      return l && { titulo: l.titulo, autor: l.autor };
+    });
+    descargar(`Mis frases - Entre Hojas - ${new Date().toLocaleDateString('en-CA')}.txt`, texto);
+  };
   const coloresUsados = [...COLORES_RESALTADOR, ...COLORES_LAPIZ].filter((c) => frases.some((f) => f.color === c));
 
   return (
@@ -184,9 +196,14 @@ export function MisFrases({ libroId }: { libroId?: string }) {
         <div className="titulo-fila">
           <h1 className="titulo-app">Mis frases</h1>
           {filtradas.length > 0 && (
-            <button className="repasar" onClick={() => setRepasando(true)}>
-              <Icono nombre="shuffle" tam={16} /> Repasar
-            </button>
+            <div className="botones-frases">
+              <button className="repasar" onClick={exportar} aria-label={`Exportar ${filtradas.length} frases`}>
+                <Icono nombre="download" tam={16} /> Exportar
+              </button>
+              <button className="repasar" onClick={() => setRepasando(true)}>
+                <Icono nombre="shuffle" tam={16} /> Repasar
+              </button>
+            </div>
           )}
         </div>
         <div className="sub">
@@ -244,9 +261,30 @@ export function MisFrases({ libroId }: { libroId?: string }) {
                     <p className="q">
                       <TextoFrase f={f} />
                     </p>
+                    <div
+                      onClick={(e) => {
+                        if (f.nota && notaDe !== f.id) {
+                          e.stopPropagation();
+                          setNotaDe(f.id);
+                        }
+                      }}
+                    >
+                      <NotaFrase f={f} editando={notaDe === f.id} alTerminar={() => setNotaDe(null)} />
+                    </div>
                     <div className="meta">
-                      <span>
+                      <span className="meta-izq">
                         Pág. {f.pagina + 1} · {cuando(f.creada)}
+                        {!f.nota && notaDe !== f.id && (
+                          <button
+                            className="poner-nota"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNotaDe(f.id);
+                            }}
+                          >
+                            <Icono nombre="lapiz" tam={12} /> Nota
+                          </button>
+                        )}
                       </span>
                       {enEstante(f.libroId) ? (
                         <span className="ir">

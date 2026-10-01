@@ -5,6 +5,7 @@ import { useFrases } from '../estado/frases';
 import type { Frase } from '../frases/modelo';
 import { Icono } from './Icono';
 import { cuando, Repasar, TextoFrase } from './MisFrases';
+import { NotaFrase } from './NotaFrase';
 
 export function PanelFrases({ libroId, alIr, alCerrar }: { libroId: string; alIr: (pagina: number) => void; alCerrar: () => void }) {
   const todas = useFrases((s) => s.frases);
@@ -31,6 +32,7 @@ export function PanelFrases({ libroId, alIr, alCerrar }: { libroId: string; alIr
             <p className="q">
               <TextoFrase f={f} />
             </p>
+            <NotaFrase f={f} editando={false} alTerminar={() => {}} />
             <div className="meta">
               <span>
                 Pág. {f.pagina + 1} · {cuando(f.creada)}

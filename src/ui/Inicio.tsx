@@ -7,6 +7,7 @@ import { useAjustes } from '../estado/ajustes';
 import { useFrases } from '../estado/frases';
 import { useLibros } from '../estado/libros';
 import { azar } from '../frases/dibujo';
+import { delDia as repasoDeHoy, diaDe } from '../frases/repaso';
 import { tiempoLegible } from '../lectura/lugar';
 import { usePwa } from '../pwa/pwa';
 import { sonido } from '../sonido/sonido';
@@ -16,6 +17,7 @@ import { Icono } from './Icono';
 import { TextoFrase } from './MisFrases';
 import { Pestanas } from './Pestanas';
 import { Portada } from './Portada';
+import { RepasoDiario } from './RepasoDiario';
 
 const saludo = () => {
   const h = new Date().getHours();
@@ -82,6 +84,10 @@ export function Inicio() {
   const visibles = q ? ordenados.filter((l) => sinAcentos(`${l.titulo} ${l.autor}`).includes(q)) : ordenados;
 
   const delDia = useMemo(() => fraseDelDia(frases.filter((f) => f.texto || f.imagen)), [frases]);
+  // El repaso del día: las frases que tocan hoy (se calcula al entrar al estante).
+  const tocanHoy = useMemo(() => repasoDeHoy(frases, Date.now()), [frases]);
+  const [repasoAbierto, setRepasoAbierto] = useState(false);
+  const racha = useAjustes((s) => s.racha);
   const libroDelDia = delDia && libros.find((l) => l.id === delDia.libroId);
 
   const elegir = () => entrada.current?.click();
@@ -204,6 +210,32 @@ export function Inicio() {
             <div className="meta">
               {[libroDelDia?.titulo ?? delDia.libroTitulo, libroDelDia?.autor, `pág. ${delDia.pagina + 1}`].filter(Boolean).join(' · ')}
             </div>
+            {tocanHoy.length > 0 ? (
+              <div className="recordar-cta">
+                <span>
+                  {tocanHoy.length} {tocanHoy.length === 1 ? 'frase para repasar hoy' : 'frases para repasar hoy'}
+                </span>
+                <button
+                  className="btn-tinta"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRepasoAbierto(true);
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  Repasar <Icono nombre="arrow-right" tam={14} />
+                </button>
+              </div>
+            ) : (
+              racha?.dia === diaDe(Date.now()) && (
+                <div className="recordar-cta listo">
+                  <span>
+                    Repaso de hoy listo <Icono nombre="check" tam={13} grosor={2.6} />
+                    {racha.dias > 1 ? ` · ${racha.dias} días seguidos` : ''}
+                  </span>
+                </div>
+              )
+            )}
           </div>
         )}
 
@@ -256,6 +288,16 @@ export function Inicio() {
 
       <input ref={entrada} type="file" accept="application/pdf,.pdf" hidden onChange={alElegir} />
 
+      {repasoAbierto && (
+        <RepasoDiario
+          frases={tocanHoy}
+          alCerrar={() => setRepasoAbierto(false)}
+          alIr={(f) => {
+            setRepasoAbierto(false);
+            abrir(f.libroId, f.pagina);
+          }}
+        />
+      )}
       {libroFicha && <FichaLibro key={libroFicha.id} libro={libroFicha} alCerrar={() => setFicha(null)} />}
 
       {subida && (

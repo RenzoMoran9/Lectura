@@ -23,6 +23,11 @@ export interface Ajustes {
   luzAuto: boolean;
   brillo: number;
   tibieza: number;
+  /** Días seguidos haciendo el repaso del día. */
+  racha?: { dia: string; dias: number };
+  /** Lectura en voz alta: la voz elegida (nombre) y la velocidad. */
+  voz?: string;
+  velocidadVoz: number;
   /** Leer con el texto a todo el ancho de la pantalla (doble toque para cambiar). */
   ajusteTexto: boolean;
   /** Buscar sola la portada original de cada libro en Open Library y Google Books. */
@@ -45,6 +50,7 @@ export const useAjustes = create<Ajustes>()(
       panelFrases: true,
       volumenAmbiente: 0.6,
       ajusteTexto: false,
+      velocidadVoz: 1,
       luzAuto: true,
       brillo: 1,
       tibieza: 0,
