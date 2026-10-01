@@ -100,6 +100,12 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   en segundo plano, con otra copia del documento, y toma los renglones cortos con letra bastante más grande que la del
   cuerpo o que empiezan con «Capítulo», «Parte», «Prólogo»…; los que se repiten en cada hoja no cuentan. Se guarda
   con el libro (`indiceArmado`).
+- **A tu medida** (`src/lectura/reacomodo.ts`, `src/lectura/medida.ts`, botón «Aa» en el celular de pie): las
+  palabras del PDF, recortadas de la página tal como se ven, se acomodan en renglones justificados al ancho de la
+  pantalla (como hace k2pdfopt), sin márgenes, encabezados ni números de página, con la letra que elijas (A− / A+).
+  Cada página se reparte en varias hojas que se pasan con el dedo y su sonido; se recuerda en cuál vas. Las marcas se
+  vuelven a dibujar alrededor de sus palabras; para marcar, la página vuelve un momento a la original. De lado y en la
+  PC, siempre la original. Los PDF a dos columnas todavía se ven mejor en «Original».
 - **Cuánto falta**: la app mide tu ritmo (segundos por página, sin contar saltos ni pausas largas) y dice cuánto te
   falta para terminar el capítulo y el libro; las rayitas de la barra de abajo son los capítulos.
 - **Pantalla encendida** mientras lees (Wake Lock); si nadie la toca en 10 minutos, se deja apagar.

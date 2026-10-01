@@ -716,3 +716,24 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: 0; bo
 .indice-armando p { margin: 0 0 10px; }
 .indice-armando .barrita { display: block; height: 4px; border-radius: 2px; background: rgba(60, 40, 20, .12); overflow: hidden; }
 .indice-armando .barrita i { display: block; height: 100%; background: var(--tinta); border-radius: 2px; transition: width .3s; }
+
+/* ---------- cómo ver la página («A tu medida») ---------- */
+.icono-barra.aa { font: 600 17px/1 "Fraunces", Georgia, serif; letter-spacing: -0.5px; }
+.vista-opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 18px; }
+.vista-opciones button {
+  text-align: left; border: 1.5px solid rgba(60, 40, 20, .18); border-radius: 14px; padding: 11px 12px; color: var(--tinta);
+  display: grid; gap: 3px; background: rgba(255, 255, 255, .35);
+}
+.vista-opciones button b { font: 600 15px "DM Sans"; }
+.vista-opciones button small { font: 500 12.5px/1.35 "DM Sans"; color: var(--tinta-2); }
+.vista-opciones button.sel { border-color: var(--tinta); box-shadow: 0 0 0 1.5px var(--tinta); background: #FFFDF8; }
+.vista-letra { display: flex; align-items: center; gap: 10px; font: 600 14.5px "DM Sans"; color: var(--tinta); margin-bottom: 12px; }
+.vista-letra span { flex: 1; }
+.vista-letra button {
+  width: 52px; height: 42px; border-radius: 12px; border: 1.5px solid rgba(60, 40, 20, .2); font: 600 16px "Fraunces", Georgia, serif;
+  color: var(--tinta); background: rgba(255, 255, 255, .4);
+}
+.vista-letra button.grande { font-size: 20px; }
+.vista-letra button:disabled { opacity: .35; }
+.vista-letra.apagada span { color: var(--tinta-3); }
+.vista-nota { font: 500 12.5px/1.45 "DM Sans"; color: var(--tinta-2); margin: 0; }

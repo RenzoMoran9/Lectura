@@ -48,9 +48,14 @@ La uso sobre todo desde el celular, y también desde la computadora.
 12. **Repaso del día, tipo tarjetas.** «Para recordar hoy» avisa cuántas frases tocan. Las que recuerdo vuelven en 3, 7, 14… días; las otras, mañana. Cuenta los días seguidos.
 13. **Nota en una frase** (corta, hasta 280 letras) y **exportar Mis frases** en un archivo de texto, agrupadas por libro.
 14. **Compartir una frase con marco.** Botón «Compartir» en cada frase (Mis frases, repasos y panel de la PC). Se elige entre 5 marcos (clásico, antiguo, noche, cuaderno y flor seca) y sale una imagen vertical para estados e historias (1080 × 1920), solo con el texto de la frase bien escrito (sin el resaltador ni el lápiz) y el nombre del libro (sin página ni autor). «Borrar palabras»: toco o arrastro sobre las que sobran y queda así también en Mis frases. Si el menú de compartir no se abre, aparece la imagen grande para guardarla o compartirla con el dedo. «Guardar imagen» la baja al teléfono; «Compartir» abre WhatsApp, Instagram o la app que elija.
+15. **«A tu medida» (opcional, en el celular de pie).** Botón «Aa» arriba: «Original» o «A tu medida».
+    - Las palabras del PDF, con sus mismas letras, se acomodan en renglones al ancho de la pantalla, sin márgenes, encabezados ni números de página. «A− / A+» cambia el tamaño de la letra.
+    - Cada página se reparte en varias hojas («1 · 2 de 5» abajo), que se pasan igual que siempre, con su curva y su sonido. Se recuerda en qué hoja voy.
+    - Lo resaltado, encerrado, en recuadro y el marcador se ven alrededor de sus palabras. Para marcar, la página vuelve un momento a la original; con «Listo», otra vez a mi medida.
+    - De lado (o en la PC) siempre se ve la página original.
 
 ## Lo que NO va (por ahora)
-Tienda de libros, notas largas, conversión a EPUB y reacomodar el texto del PDF.
+Tienda de libros, notas largas y conversión a EPUB. El PDF no se convierte a texto: «A tu medida» solo acomoda en la pantalla sus palabras tal como se ven.
 
 ## Diseño: propuesta visual v1
 La referencia está en `diseno/`:
@@ -140,6 +145,14 @@ Pantallas:
 - **Voz alta:** sin servicios externos. Voces propias con **Supertonic 3** (modelo OpenRAIL-M, versión int8 de sherpa-onnx) corriendo en el teléfono con ONNX Runtime Web en un Worker; los modelos se bajan al publicar (no van en el repositorio) y la app los guarda en la caché la primera vez. Los números y abreviaturas se pasan a palabras antes de leer. Con origen aislado (cabeceras que pone el service worker) usa varios núcleos. También las voces del sistema (`speechSynthesis`). Se lee por oraciones (las muy largas se cortan en una coma) y se saltan los números de página y los encabezados en letra chica. Mientras la voz lee, la pantalla no se apaga y esas páginas no cuentan para mi ritmo de lectura.
 - **PDFs escaneados (sin texto):** se leen igual. Lo que se resalte o encierre se guarda como recorte de imagen. El reconocimiento de texto (OCR) queda para más adelante.
 - **Celular:** una página a la vez.
+- **A tu medida** (`src/lectura/reacomodo.ts`, `src/lectura/medida.ts`), como hace k2pdfopt:
+  - La página se dibuja en grises y se buscan los renglones y las palabras por los blancos que las separan. Se quitan el encabezado, el pie y el número de página (renglones apartados y de letra más chica o muy cortos).
+  - Se arman párrafos (por sangría, aire o renglón corto) y se reparten en renglones justificados al ancho del celular, todas las palabras sobre la misma línea base. Las palabras cortadas con guion se juntan (con la capa de texto). Las figuras van enteras, achicadas si hace falta.
+  - Cada palabra es un recorte de la página dibujada en alta resolución: el texto es el del PDF, tal cual.
+  - Las hojas tienen su propio número para el motor de la hoja y se preparan solo la actual y sus vecinas.
+  - Las marcas se vuelven a dibujar sobre la hoja, alrededor de sus palabras (las que se guardaron en la frase).
+  - Buscar, el marcador, «Volver a donde ibas» y la voz alta llevan a la hoja donde quedó la línea.
+  - Los PDF a dos columnas no se acomodan bien todavía: para esos, «Original».
 - **PC o tablet en horizontal:** doble página, las flechas ← → pasan la hoja con el mismo sonido y Mis frases va en un panel lateral.
 - **Publicación:** GitHub Pages con GitHub Actions. Antes de publicar se revisan los tipos, se corren las pruebas y se compila.
 - **Nube (etapa 4):** Supabase, que ya he usado.

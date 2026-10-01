@@ -46,6 +46,8 @@ export interface Avance {
   capitulo?: string;
   /** Con zoom o de lado: a qué altura de la página iba (0 arriba, 1 abajo). */
   cy?: number;
+  /** En «A tu medida»: en qué hoja de la página iba. */
+  parte?: number;
   /** Cuántos segundos tardo por página en este libro (para saber cuánto falta). */
   ritmo?: Ritmo;
   /** Cuánto me falta, en segundos, a mi ritmo (para el estante). */

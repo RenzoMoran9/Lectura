@@ -31,6 +31,7 @@ import { Pasador, type Pase } from '../hoja/pasador';
 import { acercarEn, aLienzo, conZoom, desplazable, encuadrar, limitar, SIN_ZOOM, zoomAlTexto, type Encuadre, type Zoom } from '../hoja/zoom';
 import { capituloDe, leerCapitulos, type Capitulo } from '../pdf/indice';
 import { armarIndiceDoc } from '../pdf/indiceArmado';
+import { aOriginal, clave as claveMedida, HojasMedida, lineasEnHoja, parteDe } from '../lectura/medida';
 import type { TipoTrazo } from '../sonido/sonido';
 import { coincidencias } from '../lectura/buscar';
 import { luzActual } from '../lectura/luz';
@@ -42,6 +43,7 @@ import { ambiente } from '../sonido/ambiente';
 import { sonido } from '../sonido/sonido';
 import { AvisoBreve, AvisoModo, type Mensaje } from './Avisos';
 import { CompartirFrase } from './CompartirFrase';
+import { VistaPagina } from './VistaPagina';
 import { Icono } from './Icono';
 import { BuscarLibro, type Resultado } from './BuscarLibro';
 import { Indice } from './Indice';
@@ -80,6 +82,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const papel = useAjustes((s) => s.papel);
   const panelFrases = useAjustes((s) => s.panelFrases);
   const herramienta = useFrases((s) => s.herramienta);
+  const vistaMedidaElegida = useAjustes((s) => s.vistaMedida);
+  const letraMedida = useAjustes((s) => s.letraMedida);
 
   const contenedor = useRef<HTMLDivElement>(null);
   const lienzo = useRef<HTMLCanvasElement>(null);
@@ -98,6 +102,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const [saltoA, setSaltoA] = useState<number | null>(null);
   const [mensaje, setMensaje] = useState<Mensaje | null>(null);
   const [compartirDe, setCompartirDe] = useState<Frase | null>(null);
+  const [vistaAbierta, setVistaAbierta] = useState(false);
   /** El recuadro que espera «Guardar» o «Compartir»: dónde está en la pantalla (para no taparlo). */
   const [recuadro, setRecuadro] = useState<{ arriba: number; abajo: number } | null>(null);
   const [hayZoom, setHayZoom] = useState(false);
@@ -106,7 +111,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const [origenIndice, setOrigenIndice] = useState<{ tipo: 'pdf' | 'armado' | 'armando' | 'ninguno'; avance?: number }>({ tipo: 'pdf' });
   const [ajuste, setAjuste] = useState<Ajuste>(() => (useAjustes.getState().ajusteTexto ? 'texto' : 'pagina'));
   /** Fui a otra parte del libro (una frase, el índice, la barra): aquí iba, para volver. */
-  const [regreso, setRegreso] = useState<{ pagina: number; cy?: number } | null>(null);
+  const [regreso, setRegreso] = useState<{ pagina: number; cy?: number; parte?: number } | null>(null);
   const [indiceAbierto, setIndiceAbierto] = useState(false);
   const [pasando, setPasando] = useState(false);
   const [destellos, setDestellos] = useState<{ rects: { x: number; y: number; w: number; h: number }[]; clave: number } | null>(null);
@@ -133,9 +138,17 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const marcador = useRef<Marcador | null>(null);
   const gestos = useRef<Gestos | null>(null);
   const paginaRef = useRef(0);
+  /** «A tu medida»: en qué hoja de la página voy, si la vista está así ahora y quién prepara las hojas. */
+  const parteRef = useRef(0);
+  const [parte, setParte] = useState(0);
+  const enMedidaRef = useRef(false);
+  const [enMedida, setEnMedida] = useState(false);
+  const medida = useRef<HojasMedida | null>(null);
+  /** Al volver a abrir el libro: en qué hoja iba (cuando la página esté acomodada). */
+  const partePendiente = useRef<{ pagina: number; parte?: number; rect?: { x0: number; y0: number; x1: number; y1: number } } | null>(null);
   const dispRef = useRef<Disposicion | null>(null);
   const zoomRef = useRef<Zoom>(SIN_ZOOM);
-  const regresoRef = useRef<{ pagina: number; cy?: number } | null>(null);
+  const regresoRef = useRef<{ pagina: number; cy?: number; parte?: number } | null>(null);
   const pasesDesdeSalto = useRef(0);
   /** Altura de la página (0..1) a la que hay que llevar la vista cuando la página esté lista. */
   const cyPendiente = useRef<number | null>(null);
@@ -201,6 +214,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         cyPendiente.current = (m.y0 + m.y1) / 2;
         destelloPendiente.current = { pagina: m.pagina, rects: [m], mensaje: 'Aquí te quedaste' };
       } else if (av?.cy != null && inicial === av.pagina) cyPendiente.current = av.cy;
+      if (av?.parte != null && inicial === av.pagina && paginaPedida == null) partePendiente.current = { pagina: inicial, parte: av.parte };
       listoRef.current = true;
       setLibro(l);
       setDoc(d);
@@ -251,6 +265,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       const nuevo = await abrirPdf(archivo);
       if (docActual.current !== viejo) return cerrarPdf(nuevo);
       paginas.current?.cambiarDocumento(nuevo);
+      medida.current?.cambiarDocumento(nuevo);
       docActual.current = nuevo;
       cerrarPdf(viejo);
       if (import.meta.env.DEV) console.info(`Libro reabierto para soltar memoria (${Math.round(bytesLeidos(viejo) / 1e6)} MB leídos)`);
@@ -262,15 +277,66 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   }, []);
 
   // ---------- Qué páginas se ven ----------
+  /** «A tu medida»: la hoja que se ve y sus vecinas (con su número para el motor), o null. */
+  const hojaActual = () => claveMedida(paginaRef.current, parteRef.current);
+  const hojaSiguiente = (): number | null => {
+    const p = paginaRef.current;
+    const n = medida.current?.partes(p);
+    if (n != null && parteRef.current + 1 < n) return claveMedida(p, parteRef.current + 1);
+    return p + 1 < totalRef.current ? claveMedida(p + 1, 0) : null;
+  };
+  const hojaAnterior = (): number | null => {
+    const p = paginaRef.current;
+    if (parteRef.current > 0) return claveMedida(p, parteRef.current - 1);
+    const n = p > 0 ? medida.current?.partes(p - 1) : undefined;
+    return n != null ? claveMedida(p - 1, n - 1) : null;
+  };
+
   const escenaQuieta = useCallback((): Escena => {
     const p = paginaRef.current;
     const n = totalRef.current;
+    if (enMedidaRef.current) return { hoja: hojaActual(), debajo: null, doblez: null, sombra: 0 };
     if (esDoble()) {
       const { izquierda, derecha } = pliego(p);
       return { hoja: derecha < n ? derecha : null, izquierda: izquierda >= 0 ? izquierda : null, debajo: null, doblez: null, sombra: 0 };
     }
     return { hoja: p, debajo: null, doblez: null, sombra: 0 };
   }, []);
+
+  /**
+   * ¿Se lee «a tu medida»? Si lo elegí, en el celular de pie y sin una herramienta en la mano (para
+   * resaltar o encerrar se vuelve un momento a la página original). De lado, la página original.
+   */
+  const actualizarMedida = () => {
+    const d = dispRef.current;
+    const v = vistaTam();
+    const quiere = useAjustes.getState().vistaMedida && d?.modo === 'celular' && !!v && v.h > v.w && !useFrases.getState().herramienta;
+    if (quiere === enMedidaRef.current) return;
+    enMedidaRef.current = quiere;
+    setEnMedida(quiere);
+    if (quiere) {
+      quitarZoom();
+      motor.current?.quitarDetalles();
+    }
+    motor.current?.poner(escenaQuieta());
+    pedirPaginasRef.current();
+    requestAnimationFrame(() => {
+      ubicarCintaRef.current();
+      ubicarVozRef.current();
+    });
+  };
+  const actualizarMedidaRef = useRef(actualizarMedida);
+  actualizarMedidaRef.current = actualizarMedida;
+
+  /** «A tu medida»: muestra otra hoja de la misma página (sin pasarla con el dedo). */
+  const irAParte = (j: number) => {
+    parteRef.current = j;
+    setParte(j);
+    motor.current?.poner(escenaQuieta());
+    pedirPaginasRef.current();
+  };
+  const irAParteRef = useRef(irAParte);
+  irAParteRef.current = irAParte;
 
   const visibles = () => {
     const p = paginaRef.current;
@@ -380,6 +446,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
    */
   const densidadPantalla = () => Math.min(window.devicePixelRatio || 1, 3);
   const necesitaDetalle = (z: Zoom) => {
+    if (enMedidaRef.current) return false;
     const tam = paginas.current?.lienzoTam;
     return !!tam && tam.dpr < densidadPantalla() * z.z * 0.97;
   };
@@ -430,7 +497,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     (z: Zoom, animar = false) => {
       const d = dispRef.current;
       const el = contenedor.current;
-      if (!d || !el) return;
+      // «A tu medida» no tiene zoom: la letra se agranda con «Aa».
+      if (!d || !el || enMedidaRef.current) return;
       const destino = limitar(z, d.libro, { w: el.clientWidth, h: el.clientHeight });
       cancelAnimationFrame(animZoom.current);
       if (!animar) return aplicarZoom(destino);
@@ -509,8 +577,32 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     return true;
   };
 
+  /**
+   * «A tu medida»: dónde quedan en la pantalla los trozos de una línea de la página original (en la
+   * hoja que se ve). Las palabras vecinas en un mismo renglón nuevo se juntan en un solo trozo.
+   */
+  const rectsMedida = (m: Rango & { pagina: number }) => {
+    const d = dispRef.current;
+    const dis = medida.current?.disposicion(m.pagina);
+    const hoja = dis?.hojas[parteRef.current];
+    if (!d || !dis || !hoja || m.pagina !== paginaRef.current) return [];
+    const juntos = lineasEnHoja(hoja, { x0: m.x0 * dis.ancho, y0: m.y0 * dis.alto, x1: m.x1 * dis.ancho, y1: m.y1 * dis.alto });
+    const z = zoomRef.current;
+    return juntos.map((r) => ({ x: z.x + z.z * (d.hoja.x + r.x), y: z.y + z.z * (d.hoja.y + r.y), w: z.z * r.w, h: z.z * r.h, borde: z.x + z.z * d.hoja.x }));
+  };
+  /** Los rectángulos en la pantalla de una línea (varios en «A tu medida», si se partió). */
+  const rectsMarcaPantalla = (m: Rango & { pagina: number }) => {
+    if (enMedidaRef.current) return rectsMedida(m);
+    const r = rectMarcaPantalla(m);
+    return r ? [r] : [];
+  };
+
   /** Rectángulo en la pantalla de la línea marcada (si su página está a la vista). */
   const rectMarcaPantalla = (m: Rango & { pagina: number }) => {
+    if (enMedidaRef.current) {
+      // El primer trozo: ahí va la cinta, y hacia ahí sigue la vista.
+      return rectsMedida(m)[0] ?? null;
+    }
     const d = dispRef.current;
     const r = paginas.current?.rectPagina(m.pagina);
     if (!d || !r || !visibles().includes(m.pagina)) return null;
@@ -542,9 +634,9 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     if (!capa) return;
     const e = vozRef.current;
     const hijos = capa.children as HTMLCollectionOf<HTMLElement>;
+    const rects = e ? e.rangos.flatMap((rango) => rectsMarcaPantalla({ pagina: e.pagina, ...rango })) : [];
     for (let k = 0; k < hijos.length; k++) {
-      const rango = e?.rangos[k];
-      const r = e && rango ? rectMarcaPantalla({ pagina: e.pagina, ...rango }) : null;
+      const r = rects[k];
       const h = hijos[k];
       if (!r) {
         h.style.display = 'none';
@@ -562,16 +654,28 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   /** Al llegar a la página del marcador (o de lo buscado), esa línea brilla un momento. */
   const mostrarDestello = () => {
     const p = destelloPendiente.current;
-    if (!p || !visibles().includes(p.pagina) || !paginas.current?.obtener(p.pagina)) return;
+    if (!p || !visibles().includes(p.pagina)) return;
+    if (enMedidaRef.current) {
+      // Primero, la hoja de la página donde está (la línea del marcador, lo buscado…).
+      const dis = medida.current?.disposicion(p.pagina);
+      if (!dis) return;
+      const r = p.rects[0];
+      const j = r ? parteDe(dis, { x0: r.x0 * dis.ancho, y0: r.y0 * dis.alto, x1: r.x1 * dis.ancho, y1: r.y1 * dis.alto }) : -1;
+      if (j >= 0 && j !== parteRef.current) {
+        irAParteRef.current(j);
+        return;
+      }
+      if (!medida.current?.obtener(hojaActual())) return;
+    } else if (!paginas.current?.obtener(p.pagina)) return;
     destelloPendiente.current = null;
     window.setTimeout(() => {
-      const rects = p.rects.map((r) => rectMarcaPantalla({ pagina: p.pagina, ...r })).filter((r) => !!r);
+      const rects = p.rects.flatMap((r) => rectsMarcaPantalla({ pagina: p.pagina, ...r }));
       if (rects.length) setDestellos({ rects, clave: Date.now() });
       if (p.mensaje) setMensaje({ texto: p.mensaje, clave: Date.now() });
     }, 350);
   };
 
-  const ponerRegreso = (r: { pagina: number; cy?: number } | null) => {
+  const ponerRegreso = (r: { pagina: number; cy?: number; parte?: number } | null) => {
     regresoRef.current = r;
     pasesDesdeSalto.current = 0;
     setRegreso(r);
@@ -600,16 +704,30 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     if (!d || !pags || !doc || useFrases.getState().herramienta) return;
     const c = aLienzo(zoomRef.current, x, y);
     let i = paginaRef.current;
-    if (d.modo === 'doble') {
-      const { izquierda, derecha } = pliego(paginaRef.current);
-      i = c.x < d.hoja.x ? izquierda : derecha;
+    let u: number;
+    let v: number;
+    let ub: { ancho: number; alto: number } | undefined;
+    if (enMedidaRef.current) {
+      // La palabra tocada en la hoja, en su lugar de la página original.
+      const dis = medida.current?.disposicion(i);
+      const hoja = dis?.hojas[parteRef.current];
+      const o = hoja && aOriginal(hoja, c.x - d.hoja.x, c.y - d.hoja.y);
+      if (!dis || !o) return;
+      ub = { ancho: dis.ancho, alto: dis.alto };
+      u = o.u / dis.ancho;
+      v = o.v / dis.alto;
+    } else {
+      if (d.modo === 'doble') {
+        const { izquierda, derecha } = pliego(paginaRef.current);
+        i = c.x < d.hoja.x ? izquierda : derecha;
+      }
+      if (i < 0 || i >= totalRef.current) return;
+      const r = pags.rectPagina(i);
+      ub = pags.ubicacion(i);
+      if (!r || !ub) return;
+      u = (c.x - origenPagina(i) - r.x) / r.w;
+      v = (c.y - d.hoja.y - r.y) / r.h;
     }
-    if (i < 0 || i >= totalRef.current) return;
-    const r = pags.rectPagina(i);
-    const ub = pags.ubicacion(i);
-    if (!r || !ub) return;
-    const u = (c.x - origenPagina(i) - r.x) / r.w;
-    const v = (c.y - d.hoja.y - r.y) / r.h;
     if (u < -0.05 || u > 1.05 || v < 0 || v > 1) return;
     navigator.vibrate?.(12);
     const { actualizar } = useLibros.getState();
@@ -675,6 +793,45 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     const pags = new Paginas(docActual.current ?? doc);
     paginas.current = pags;
 
+    // «A tu medida»: las hojas del celular, con sus marcas dibujadas sobre las palabras.
+    const marcasDePagina = (i: number) => {
+      const marca = useLibros.getState().libros.find((l) => l.id === libro.id)?.marcador;
+      return {
+        frases: useFrases.getState().frases.filter((f) => f.libroId === libro.id && f.pagina === i),
+        marcador: marca?.pagina === i ? marca : null,
+      };
+    };
+    const med = new HojasMedida(docActual.current ?? doc, { ancho: 1, alto: 1, dpr: 1, letra: 20, titulo: libro.titulo }, marcasDePagina);
+    medida.current = med;
+    med.onLista = (k, c) => {
+      m.subirPagina(k, c);
+      if (!enMedidaRef.current || k !== hojaActual()) return;
+      setDibujada(true);
+      mostrarDestelloRef.current();
+      ubicarCintaRef.current();
+      ubicarVozRef.current();
+    };
+    med.onSoltada = (k) => m.soltarPagina(k);
+    med.onDisposicion = (pagina, d) => {
+      if (!enMedidaRef.current || pagina !== paginaRef.current) return;
+      // Al volver a abrir el libro: la hoja donde iba. Y nunca más allá de las que tiene la página.
+      const pendiente = partePendiente.current;
+      let j = parteRef.current;
+      if (pendiente?.pagina === pagina) {
+        partePendiente.current = null;
+        if (pendiente.rect) j = Math.max(0, parteDe(d, pendiente.rect));
+        else if (pendiente.parte != null) j = pendiente.parte;
+      }
+      j = Math.max(0, Math.min(d.hojas.length - 1, j));
+      if (j !== parteRef.current) {
+        parteRef.current = j;
+        setParte(j);
+        m.poner(escenaQuieta());
+      }
+      pedirPaginasRef.current();
+      mostrarDestelloRef.current();
+    };
+
     // Marcas de cada página: un lienzo blanco con sus frases, que el shader multiplica con la página.
     const lienzosMarcas = new Map<number, HTMLCanvasElement>();
     const pintarMarcas = (i: number) => {
@@ -699,7 +856,11 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       m.subirMarcas(i, c);
     };
     const dejarDeEscuchar = useFrases.subscribe((ahora, antes) => {
-      if (ahora.frases !== antes.frases) pags.indices().forEach(pintarMarcas);
+      if (ahora.frases === antes.frases) return;
+      pags.indices().forEach(pintarMarcas);
+      // En «A tu medida», las hojas de las páginas cercanas se vuelven a dibujar con sus marcas.
+      const p = paginaRef.current;
+      if (enMedidaRef.current) [p, p - 1, p + 1].forEach((i) => med.marcasCambiaron(i));
     });
     const marcaDe = (st: { libros: Libro[] }) => st.libros.find((l) => l.id === libro.id)?.marcador;
     const dejarDeEscucharMarca = useLibros.subscribe((ahora, antes) => {
@@ -707,6 +868,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       const b = marcaDe(antes);
       if (a === b) return;
       for (const i of new Set([a?.pagina, b?.pagina])) if (i != null && pags.obtener(i)) pintarMarcas(i);
+      for (const i of new Set([a?.pagina, b?.pagina])) if (i != null) med.marcasCambiaron(i);
       requestAnimationFrame(() => ubicarCintaRef.current());
     });
 
@@ -738,6 +900,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       },
       doble: esDoble,
       puede: (s) => {
+        if (enMedidaRef.current) return (s === 'adelante' ? hojaSiguiente() : hojaAnterior()) != null;
         const n = totalRef.current;
         const pa = paginaRef.current;
         if (esDoble()) {
@@ -751,6 +914,14 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         const n = totalRef.current;
         const pa = paginaRef.current;
         const { doblez, sombra } = pase;
+        if (enMedidaRef.current) {
+          m.poner(
+            pase.sentido === 'adelante'
+              ? { hoja: hojaActual(), debajo: hojaSiguiente(), doblez, sombra }
+              : { hoja: hojaAnterior(), debajo: hojaActual(), doblez, sombra },
+          );
+          return;
+        }
         if (esDoble()) {
           const { izquierda: iz, derecha: de } = pliego(pa);
           const o = (i: number) => (i >= 0 && i < n ? i : null);
@@ -770,18 +941,33 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           // El ritmo: cuánto tardé en leer la página que acabo de pasar.
           const ahora = performance.now();
           // (Mientras la voz lee, no: ese no es mi ritmo de lectura.)
+          // En «A tu medida» una página son varias hojas: lo de una hoja, por las hojas de la página.
+          const hojas = enMedidaRef.current ? (medida.current?.partes(paginaRef.current) ?? 1) : 1;
           if (s === 'adelante' && !lecturaVoz.current?.activa) {
-            ritmoRef.current = sumarAlRitmo(ritmoRef.current, (ahora - inicioPagina.current) / 1000 / (esDoble() ? 2 : 1));
+            ritmoRef.current = sumarAlRitmo(ritmoRef.current, ((ahora - inicioPagina.current) / 1000 / (esDoble() ? 2 : 1)) * hojas);
             setRitmo(ritmoRef.current);
           }
           inicioPagina.current = ahora;
           // Si había ido a ver otra parte y sigo leyendo desde ahí, ese pasa a ser mi lugar.
           if (regresoRef.current && ++pasesDesdeSalto.current >= 2) ponerRegresoRef.current(null);
-          if (esDoble()) {
+          const antes = paginaRef.current;
+          if (enMedidaRef.current) {
+            // La hoja siguiente (o anterior): de la misma página o de la vecina.
+            if (s === 'adelante') {
+              if (parteRef.current + 1 < hojas) parteRef.current++;
+              else [paginaRef.current, parteRef.current] = [antes + 1, 0];
+            } else if (parteRef.current > 0) parteRef.current--;
+            else [paginaRef.current, parteRef.current] = [antes - 1, (medida.current?.partes(antes - 1) ?? 1) - 1];
+            setParte(parteRef.current);
+          } else if (esDoble()) {
             const { izquierda, derecha } = pliego(paginaRef.current);
             paginaRef.current = s === 'adelante' ? derecha + 1 : Math.max(0, izquierda - 2);
-          } else paginaRef.current += s === 'adelante' ? 1 : -1;
-          setPagina(paginaRef.current);
+          } else {
+            paginaRef.current += s === 'adelante' ? 1 : -1;
+            parteRef.current = 0;
+          }
+          if (paginaRef.current !== antes) setPagina(paginaRef.current);
+          else pedirPaginas();
           void revisarMemoria();
         }
         quieta();
@@ -970,7 +1156,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         if (!useFrases.getState().herramienta && d?.modo === 'celular') setCromo((c) => !c);
       },
       dobleToque: (x, y) => {
-        if (useFrases.getState().herramienta) return;
+        if (useFrases.getState().herramienta || enMedidaRef.current) return;
         const d = dispRef.current;
         const v = vistaTam();
         if (!d || !v) return;
@@ -1029,9 +1215,11 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       marcador.current = null;
       p.destruir();
       pags.destruir();
+      med.destruir();
       m.destruir();
       motor.current = null;
       paginas.current = null;
+      medida.current = null;
       pasador.current = null;
     };
   }, [doc, libro, revisarMemoria, escenaQuieta, ponerZoom, aplicarZoom, programarDetalle]);
@@ -1071,6 +1259,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       quitarZoom();
       motor.current?.medir(w, h, dprLienzo, d.hoja, { recortarLomo: d.modo === 'mesa', doble: d.modo === 'doble' });
       paginas.current?.configurar({ ancho: d.hoja.w, alto: d.hoja.h, dpr, caja: d.caja, titulo: libro.titulo });
+      medida.current?.configurar({ ancho: d.hoja.w, alto: d.hoja.h, dpr, letra: useAjustes.getState().letraMedida, titulo: libro.titulo });
+      actualizarMedidaRef.current();
       if (cambioModo) {
         motor.current?.poner(escenaQuieta());
         pedirPaginas();
@@ -1096,12 +1286,24 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   // ---------- 4. Al cambiar de página: dibujar las vecinas y recordar dónde voy ----------
   const pedirPaginas = () => {
     const p = paginaRef.current;
+    if (enMedidaRef.current) {
+      // La hoja que se ve y sus vecinas; y las páginas de al lado, acomodadas (para volver atrás).
+      const claves = [hojaActual(), hojaSiguiente(), hojaAnterior()].filter((k): k is number => k != null);
+      medida.current?.pedir(claves, [p, p + 1, p - 1].filter((i) => i >= 0 && i < totalRef.current));
+      // La página original se sigue dibujando: la usan el resaltador, el lápiz y el recuadro.
+      paginas.current?.pedir([p]);
+      setDibujada(!!medida.current?.obtener(hojaActual()));
+      return;
+    }
+    medida.current?.pedir([]);
     if (esDoble()) {
       const { izquierda: iz, derecha: de } = pliego(p);
       paginas.current?.pedir([de, iz, de + 1, de + 2, iz - 1, iz - 2]);
     } else paginas.current?.pedir([p, p + 1, p - 1, p + 2, p - 2]);
     setDibujada(visibles().every((i) => !!paginas.current?.obtener(i)));
   };
+  const pedirPaginasRef = useRef(pedirPaginas);
+  pedirPaginasRef.current = pedirPaginas;
 
   /**
    * Guarda dónde voy: la página, la altura en ella (con zoom o de lado), el capítulo, mi ritmo y
@@ -1119,6 +1321,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       actualizado: Date.now(),
       capitulo: capituloDe(capitulosRef.current, p),
       cy: cyRef.current,
+      parte: enMedidaRef.current ? parteRef.current : undefined,
       ritmo: ritmoRef.current,
       falta: f ? { libro: f.libro, capitulo: f.capitulo ?? undefined } : undefined,
     };
@@ -1128,6 +1331,13 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   anotarRef.current = anotar;
 
   const capitulo = pagina !== null ? capituloDe(capitulos, pagina) : undefined;
+
+  // «A tu medida»: al pasar a otra hoja de la misma página, también se recuerda.
+  useEffect(() => {
+    if (!enMedidaRef.current) return;
+    const t = setTimeout(() => anotar(), 300);
+    return () => clearTimeout(t);
+  }, [parte, anotar]);
 
   useEffect(() => {
     if (pagina === null || !doc || !libro) return;
@@ -1250,6 +1460,25 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     else marcador.current?.cancelar();
   }, [herramienta]);
 
+  // «A tu medida»: al elegirla, al cambiar el tamaño de la letra o al tomar una herramienta.
+  useEffect(() => {
+    const med = medida.current;
+    if (med && med.opciones.letra !== letraMedida) {
+      // Se sigue leyendo en el mismo renglón: la primera palabra de la hoja que se ve.
+      const p = paginaRef.current;
+      const primera = med.disposicion(p)?.hojas[parteRef.current]?.piezas[0];
+      if (enMedidaRef.current && primera) partePendiente.current = { pagina: p, rect: { x0: primera.sx, y0: primera.sy, x1: primera.sx + primera.sw, y1: primera.sy + primera.sh } };
+      med.configurar({ ...med.opciones, letra: letraMedida });
+      if (enMedidaRef.current) {
+        motor.current?.poner(escenaQuieta());
+        pedirPaginasRef.current();
+      }
+    }
+    actualizarMedidaRef.current();
+    // escenaQuieta lee refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vistaMedidaElegida, letraMedida, herramienta]);
+
   // Al salir del libro se vuelve a leer: la próxima vez el dedo pasa la hoja.
   useEffect(
     () => () => {
@@ -1265,8 +1494,10 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     if (!c) return;
     // Borrar no depende de nada más (si no, la vista previa podía quedarse pegada).
     if (!pv) {
-      // Se reinicia el lienzo entero (un clearRect a veces no alcanzaba a borrar en Chrome).
+      // Se reinicia el lienzo entero (un clearRect a veces no alcanzaba a borrar en Chrome; volver
+      // a ponerle el mismo ancho tampoco siempre: primero se deja en cero).
       const { width, height } = c;
+      c.width = 0;
       c.width = width;
       c.height = height;
       return;
@@ -1304,10 +1535,13 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       const aqui = paginaRef.current;
       if (opciones.regreso !== false && destino !== aqui) {
         if (regresoRef.current?.pagina === destino) ponerRegresoRef.current(null);
-        else if (!regresoRef.current) ponerRegresoRef.current({ pagina: aqui, cy: vistaCyRef.current() });
+        else if (!regresoRef.current)
+          ponerRegresoRef.current({ pagina: aqui, cy: vistaCyRef.current(), parte: enMedidaRef.current ? parteRef.current : undefined });
         else pasesDesdeSalto.current = 0;
       }
       paginaRef.current = destino;
+      parteRef.current = 0;
+      setParte(0);
       inicioPagina.current = performance.now();
       cyPendiente.current = opciones.cy ?? null;
       setPagina(destino);
@@ -1315,6 +1549,11 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       motor.current?.poner(escenaQuieta());
       reencuadrarRef.current('arriba', false);
       aplicarCyPendienteRef.current();
+      // En «A tu medida», en la misma página: la página no cambia, pero la hoja sí.
+      if (enMedidaRef.current && destino === aqui) {
+        pedirPaginasRef.current();
+        mostrarDestelloRef.current();
+      }
     },
     [doc, revisarMemoria, escenaQuieta],
   );
@@ -1325,6 +1564,11 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     if (!r) return;
     ponerRegreso(null);
     irA(r.pagina, { regreso: false, cy: r.cy });
+    if (r.parte == null || !enMedidaRef.current) return;
+    // La hoja donde iba (ahora, si la página ya está acomodada; si no, cuando lo esté).
+    const n = medida.current?.partes(r.pagina);
+    if (n != null) irAParteRef.current(Math.min(n - 1, r.parte));
+    else partePendiente.current = { pagina: r.pagina, parte: r.parte };
   };
 
   /** Desde el índice: ir al marcador (la línea brilla al llegar). */
@@ -1544,6 +1788,12 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
 
   /** Con la vista movible (zoom o de lado): a qué altura de la página está el borde de arriba. */
   const alturaArriba = (): number | undefined => {
+    if (enMedidaRef.current) {
+      // Desde la primera palabra de la hoja que se ve.
+      const dis = medida.current?.disposicion(paginaRef.current);
+      const primera = dis?.hojas[parteRef.current]?.piezas[0];
+      return dis && primera ? Math.max(0, (primera.sy + primera.sh * 0.3) / dis.alto) : undefined;
+    }
     const d = dispRef.current;
     const v = vistaTam();
     if (!d || !v || d.modo === 'doble' || !sePuedeMover()) return undefined;
@@ -1571,7 +1821,12 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         texto: textoParaVoz,
         visibles,
         total: () => totalRef.current,
-        pasar: () => pasador.current?.pasarSola('adelante'),
+        pasar: () => {
+          // En «A tu medida», la voz terminó la página: se va a su última hoja y de ahí a la siguiente.
+          const n = medida.current?.partes(paginaRef.current);
+          if (enMedidaRef.current && n != null && parteRef.current < n - 1) irAParteRef.current(n - 1);
+          pasador.current?.pasarSola('adelante');
+        },
         locutor: locutorActual,
         velocidad: () => useAjustes.getState().velocidadVoz,
         alCambiar: (e) => {
@@ -1602,6 +1857,15 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
 
   /** Con zoom o de lado: si la oración que se lee queda fuera de la vista, la vista va hacia ella. */
   const seguirVoz = (e: EstadoVoz) => {
+    if (enMedidaRef.current) {
+      // La oración que se lee está en una hoja más adelante de la misma página: se pasa la hoja.
+      const dis = medida.current?.disposicion(e.pagina);
+      const r = e.rangos[0];
+      if (!dis || !r || e.pagina !== paginaRef.current || pasador.current?.ocupado || gestos.current?.ocupado) return;
+      const j = parteDe(dis, { x0: r.x0 * dis.ancho, y0: r.y0 * dis.alto, x1: r.x1 * dis.ancho, y1: r.y1 * dis.alto });
+      if (j > parteRef.current) pasador.current?.pasarSola('adelante');
+      return;
+    }
     const v = vistaTam();
     if (!e.rangos.length || !v || !sePuedeMover() || gestos.current?.ocupado || pasador.current?.ocupado) return;
     const a = rectMarcaPantalla({ pagina: e.pagina, ...e.rangos[0] });
@@ -1715,7 +1979,10 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         ))}
         {/* La oración que lee la voz, iluminada (un rectángulo por renglón; se ubican al hacer zoom). */}
         <div ref={capaVoz} className={`capa-voz ${voz?.fase === 'pausa' ? 'en-pausa' : ''}`} aria-hidden="true">
-          {voz?.rangos.map((_, k) => <div key={k} className="voz-frase" style={{ display: 'none' }} />)}
+          {/* En «A tu medida» una línea puede quedar partida en dos o tres renglones. */}
+          {Array.from({ length: (voz?.rangos.length ?? 0) * 3 }, (_, k) => (
+            <div key={k} className="voz-frase" style={{ display: 'none' }} />
+          ))}
         </div>
         {/* Luz del papel: de noche, más cálida y tenue (como bajo una lámpara). */}
         <div className="luz-papel" style={{ opacity: luz.tibieza * 0.34 }} aria-hidden="true" />
@@ -1737,6 +2004,16 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           <Icono nombre="chevron-left" tam={20} /> {desde === 'frases' ? 'Mis frases' : 'Estante'}
         </button>
         <div className="cromo-titulo">{enMesa ? tituloBarra : libro?.titulo}</div>
+        {disp?.modo === 'celular' && (
+          <button
+            className={`icono-barra aa ${enMedida ? 'on' : ''}`}
+            onClick={() => setVistaAbierta(true)}
+            aria-label="Cómo ver la página"
+            title="Cómo ver la página"
+          >
+            Aa
+          </button>
+        )}
         <button
           className={`icono-barra ${voz ? 'on' : ''}`}
           onClick={() => (voz ? lecturaVoz.current?.detener() : leerEnVoz())}
@@ -1830,6 +2107,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       )}
       <AvisoBreve mensaje={mensaje} alCerrar={cerrarMensaje} />
       {compartirDe && <CompartirFrase f={compartirDe} alCerrar={() => setCompartirDe(null)} />}
+      {vistaAbierta && <VistaPagina deLado={!!disp && disp.modo === 'celular' && anchoVentana > (vistaMedida.current?.h ?? 0)} alCerrar={() => setVistaAbierta(false)} />}
       {regreso && !herramienta && (
         <button className={`volver-lugar ${cromo && !enMesa ? 'bajo-cromo' : ''} ${enMesa ? 'en-mesa' : ''}`} onClick={volverAlLugar}>
           <span className="cinta-chica" aria-hidden="true" />

@@ -87,10 +87,9 @@ export function MenuEsquina({
       setArrastre(null);
       return;
     }
-    setAbierto((a) => {
-      if (!a) alAbrir?.();
-      return !a;
-    });
+    // Se avisa afuera del cambio de estado (si no, React se queja: actualiza otro componente al dibujar).
+    if (!abierto) alAbrir?.();
+    setAbierto(!abierto);
   };
 
   // Abanico hacia adentro: en una esquina, un cuarto de círculo entre la horizontal y la vertical

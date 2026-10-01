@@ -39,6 +39,10 @@ export interface Ajustes {
   portadasEnLinea: boolean;
   /** Ya no mostrar el aviso de cómo instalar la app en el iPhone. */
   sinAvisoInstalar: boolean;
+  /** «A tu medida»: en el celular de pie, los renglones acomodados al ancho de la pantalla. */
+  vistaMedida: boolean;
+  /** Alto del renglón en «A tu medida» (px). */
+  letraMedida: number;
   poner: (cambios: Partial<Omit<Ajustes, 'poner'>>) => void;
 }
 
@@ -61,6 +65,8 @@ export const useAjustes = create<Ajustes>()(
       tibieza: 0,
       portadasEnLinea: true,
       sinAvisoInstalar: false,
+      vistaMedida: false,
+      letraMedida: 20,
       poner: (cambios) => set(cambios),
     }),
     { name: 'entre-hojas:ajustes', version: 1 },
