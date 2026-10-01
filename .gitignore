@@ -5,4 +5,6 @@ dist/
 .env
 .env.*
 public/pdfjs/
+public/ort/
+public/voces/supertonic/
 test-results/

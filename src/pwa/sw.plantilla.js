@@ -31,6 +31,16 @@ self.addEventListener('message', (e) => {
   if (e.data === 'actualizar') self.skipWaiting();
 });
 
+// Origen aislado: así las voces propias pueden usar varios núcleos del procesador (GitHub Pages no
+// deja poner estas cabeceras; las pone el service worker al abrir la app). «credentialless» deja
+// mostrar las portadas de internet como siempre.
+function aislada(r) {
+  const h = new Headers(r.headers);
+  h.set('Cross-Origin-Opener-Policy', 'same-origin');
+  h.set('Cross-Origin-Embedder-Policy', 'credentialless');
+  return new Response(r.body, { status: r.status, statusText: r.statusText, headers: h });
+}
+
 self.addEventListener('fetch', (e) => {
   const pedido = e.request;
   if (pedido.method !== 'GET' || pedido.headers.has('range')) return;
@@ -39,10 +49,16 @@ self.addEventListener('fetch', (e) => {
   // Abrir la app: siempre la página guardada (la versión nueva llega con el aviso de actualizar).
   if (pedido.mode === 'navigate' && url.href.startsWith(BASE)) {
     e.respondWith(
-      caches.match(BASE + 'index.html', { cacheName: CACHE_APP }).then((r) => r || fetch(pedido)),
+      caches
+        .match(BASE + 'index.html', { cacheName: CACHE_APP })
+        .then((r) => r || fetch(pedido))
+        .then(aislada),
     );
     return;
   }
+
+  // Las voces propias: las guarda su Worker en su propia caché (aquí no se duplican).
+  if (url.href.startsWith(BASE + 'voces/')) return;
 
   // Archivos de la app: primero lo guardado; lo que no estaba (el libro de muestra) se guarda al usarlo.
   if (url.href.startsWith(BASE)) {

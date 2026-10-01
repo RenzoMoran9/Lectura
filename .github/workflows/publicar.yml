@@ -28,6 +28,17 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
+      # Las voces propias (145 MB) no están en el repositorio: se bajan al publicar y se guardan
+      # en la caché de Actions para no bajarlas cada vez.
+      - name: Caché de las voces
+        uses: actions/cache@v4
+        with:
+          path: public/voces/supertonic
+          key: voces-${{ hashFiles('scripts/voces.mjs') }}
+
+      - name: Bajar las voces
+        run: npm run voces
+
       - name: Revisar tipos
         run: npm run typecheck
 

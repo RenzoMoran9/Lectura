@@ -33,7 +33,8 @@ import { capituloDe, leerCapitulos, type Capitulo } from '../pdf/indice';
 import type { TipoTrazo } from '../sonido/sonido';
 import { coincidencias } from '../lectura/buscar';
 import { luzActual } from '../lectura/luz';
-import { hayVoz, LecturaEnVoz, nombresVoces, oracionDesdeAltura, oracionEn, vocesEnEspanol, type EstadoVoz } from '../lectura/voz';
+import { hayVoz, LecturaEnVoz, Narrador, nombresVoces, oracionDesdeAltura, oracionEn, vocesEnEspanol, type EstadoVoz, type Locutor } from '../lectura/voz';
+import { LocutorPropio, motorVoces, VOCES_PROPIAS, vozPropia } from '../lectura/vozPropia';
 import { abrirPdf, bytesLeidos, cerrarPdf, type DocumentoPdf } from '../pdf/pdf';
 import { Paginas } from '../pdf/paginas';
 import { ambiente } from '../sonido/ambiente';
@@ -107,6 +108,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const [voz, setVoz] = useState<EstadoVoz | null>(null);
   const [voces, setVoces] = useState<SpeechSynthesisVoice[]>([]);
   const vozGuardada = useAjustes((s) => s.voz);
+  const [estadoVoces, setEstadoVoces] = useState(motorVoces.estado);
+  const [vocesBajadas, setVocesBajadas] = useState(true);
   const velocidadVoz = useAjustes((s) => s.velocidadVoz);
   const boton = useAjustes((s) => s.boton);
   const luzAuto = useAjustes((s) => s.luzAuto);
@@ -1416,6 +1419,46 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     return vs.find((v) => v.voiceURI === guardada) ?? vs[0];
   };
 
+  // Las voces de Entre Hojas: si ya se bajaron alguna vez y cuánto pesan.
+  useEffect(() => motorVoces.oir(setEstadoVoces), []);
+  useEffect(() => {
+    if (!voz) return;
+    void motorVoces.bajadas().then(setVocesBajadas);
+    void motorVoces.revisar();
+  }, [voz === null, estadoVoces.fase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const narradorSistema = useRef<Narrador | null>(null);
+  const locutoresPropios = useRef(new Map<string, LocutorPropio>());
+  /**
+   * Quién lee: la voz propia elegida (mientras se baja la primera vez, sigue la del celular) o la
+   * del sistema.
+   */
+  const locutorActual = (): Locutor => {
+    const propia = vozPropia(useAjustes.getState().voz);
+    const fase = motorVoces.estado.fase;
+    // Mientras se baja la primera vez, lee la del celular (si el celular tiene voces en español).
+    const sinSistema = !hayVoz() || !vocesRef.current.length;
+    if (propia && (fase === 'lista' || fase === 'preparando' || sinSistema)) {
+      let l = locutoresPropios.current.get(propia.id);
+      if (!l) {
+        l = new LocutorPropio(propia);
+        locutoresPropios.current.set(propia.id, l);
+      }
+      return l;
+    }
+    const n = (narradorSistema.current ??= new Narrador());
+    n.voz = vozElegida();
+    return n;
+  };
+
+  // Cuando la voz propia queda lista, la oración sigue con ella.
+  useEffect(() => {
+    const l = lecturaVoz.current;
+    if (estadoVoces.fase === 'lista' && l?.activa && vozPropia(useAjustes.getState().voz) && !(l.enUso instanceof LocutorPropio)) l.repetir();
+    if (estadoVoces.fase === 'error' && vozPropia(useAjustes.getState().voz) && l?.activa)
+      setMensaje({ texto: 'No se pudo bajar la voz: sigo con la del celular.', clave: Date.now() });
+  }, [estadoVoces.fase]);
+
   /** El texto de una página para leerlo en voz alta, con la medida de la página (sus unidades). */
   const textoParaVoz = async (i: number) => {
     const d = docActual.current;
@@ -1443,7 +1486,11 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
    * de lado) o desde arriba. Al terminar la página, la hoja pasa sola y se sigue leyendo.
    */
   const leerEnVoz = () => {
-    if (!hayVoz()) {
+    // Sin voces en español en el teléfono (y sin una elegida), se usa una de Entre Hojas.
+    if (!useAjustes.getState().voz && !vocesRef.current.length) useAjustes.getState().poner({ voz: VOCES_PROPIAS[0].id });
+    const propia = vozPropia(useAjustes.getState().voz);
+    if (propia) void motorVoces.cargar().catch(() => {});
+    if (!hayVoz() && !propia) {
       setMensaje({ texto: 'Este navegador no puede leer en voz alta.', clave: Date.now() });
       return;
     }
@@ -1454,7 +1501,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         visibles,
         total: () => totalRef.current,
         pasar: () => pasador.current?.pasarSola('adelante'),
-        voz: vozElegida,
+        locutor: locutorActual,
         velocidad: () => useAjustes.getState().velocidadVoz,
         alCambiar: (e) => {
           vozRef.current = e;
@@ -1467,6 +1514,11 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     }
     setCromo(false);
     sonido.despertar();
+    // La primera vez, se avisa de las voces nuevas.
+    if (!useAjustes.getState().avisoVoces && !propia) {
+      useAjustes.getState().poner({ avisoVoces: true });
+      setMensaje({ texto: 'Voces nuevas: Lucía, Elena, Mateo y Andrés · toca el nombre de la voz para elegir', clave: Date.now() });
+    }
     const vis = visibles();
     const m = marcadorRef.current;
     const marca = m && vis.includes(m.pagina) ? m : null;
@@ -1512,8 +1564,23 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     useAjustes.getState().poner({ velocidadVoz: VELOCIDADES[(i + 1) % VELOCIDADES.length] });
     lecturaVoz.current?.repetir();
   };
-  const vozActual = voces.find((v) => v.voiceURI === vozGuardada) ?? voces[0];
+  const propiaElegida = vozPropia(vozGuardada);
+  const vozActual = propiaElegida ? undefined : (voces.find((v) => v.voiceURI === vozGuardada) ?? voces[0]);
   const nombres = nombresVoces(voces);
+  const nombreVoz = propiaElegida ? propiaElegida.nombre : vozActual ? nombres[voces.indexOf(vozActual)] : 'voz del sistema';
+  const estadoVozPropia =
+    propiaElegida && estadoVoces.fase === 'bajando'
+      ? ` · bajando ${Math.round(estadoVoces.avance * 100)} %`
+      : propiaElegida && estadoVoces.fase === 'preparando'
+        ? ' · preparando…'
+        : propiaElegida && estadoVoces.fase === 'error'
+          ? ' · no se pudo bajar'
+          : '';
+  const elegirVoz = (id: string) => {
+    useAjustes.getState().poner({ voz: id });
+    if (vozPropia(id)) void motorVoces.cargar().catch(() => {});
+    lecturaVoz.current?.repetir();
+  };
 
   const total = doc?.numPages ?? 0;
   const noche = papel === 'noche';
@@ -1709,27 +1776,29 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
               <b>{voz.fase === 'pausa' ? 'En pausa' : voz.fase === 'pasando' ? 'Pasando la hoja…' : 'Leyendo en voz alta'}</b>
               <span className="voz-sub">
                 Pág. {miles(voz.pagina + 1)} ·{' '}
-                {vozActual ? (
-                  <label className="voz-elegir">
-                    {nombres[voces.indexOf(vozActual)]}
-                    <select
-                      value={vozActual.voiceURI}
-                      aria-label="Voz"
-                      onChange={(e) => {
-                        useAjustes.getState().poner({ voz: e.target.value });
-                        lecturaVoz.current?.repetir();
-                      }}
-                    >
-                      {voces.map((v, k) => (
-                        <option key={v.voiceURI} value={v.voiceURI}>
-                          {nombres[k]}
+                <label className="voz-elegir">
+                  {nombreVoz}
+                  {estadoVozPropia}
+                  <select value={propiaElegida?.id ?? vozActual?.voiceURI ?? ''} aria-label="Voz" onChange={(e) => elegirVoz(e.target.value)}>
+                    <optgroup label="Voces de Entre Hojas (español latino)">
+                      {VOCES_PROPIAS.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.nombre} ({v.genero}){vocesBajadas ? '' : ` · se baja una vez, ${estadoVoces.mb} MB`}
                         </option>
                       ))}
-                    </select>
-                  </label>
-                ) : (
-                  'voz del sistema'
-                )}
+                    </optgroup>
+                    {voces.length > 0 && (
+                      <optgroup label="Del celular">
+                        {voces.map((v, k) => (
+                          <option key={v.voiceURI} value={v.voiceURI}>
+                            {nombres[k]}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {!voces.length && !propiaElegida && <option value="">voz del sistema</option>}
+                  </select>
+                </label>
               </span>
             </div>
             <button className="voz-vel" onClick={cambiarVelocidad} aria-label={`Velocidad: ${velocidadVoz.toLocaleString('es')}×. Tocar para cambiar`}>

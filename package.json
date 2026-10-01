@@ -5,15 +5,17 @@
   "type": "module",
   "description": "Entre Hojas — lector de libros en PDF que se siente como un libro de papel",
   "scripts": {
-    "pdfjs": "node scripts/copiar-pdfjs.mjs",
-    "dev": "npm run pdfjs && vite",
-    "build": "npm run pdfjs && vite build",
+    "recursos": "node scripts/copiar-pdfjs.mjs && node scripts/copiar-ort.mjs",
+    "voces": "node scripts/voces.mjs",
+    "dev": "npm run recursos && vite",
+    "build": "npm run recursos && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "idb": "^8.0.3",
+    "onnxruntime-web": "^1.30.0",
     "pdfjs-dist": "^6.3.289",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

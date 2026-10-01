@@ -30,6 +30,8 @@ export interface Ajustes {
   marco?: Marco;
   /** Lectura en voz alta: la voz elegida (nombre) y la velocidad. */
   voz?: string;
+  /** Ya se avisó de las voces propias (Lucía, Elena, Mateo y Andrés). */
+  avisoVoces?: boolean;
   velocidadVoz: number;
   /** Leer con el texto a todo el ancho de la pantalla (doble toque para cambiar). */
   ajusteTexto: boolean;

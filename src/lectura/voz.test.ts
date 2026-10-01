@@ -155,6 +155,7 @@ describe('leer en voz alta', () => {
 
   const preparar = (opciones: { visibles?: () => number[] } = {}) => {
     const s = new SintesisFalsa();
+    const narrador = new Narrador(s, EnunciadoFalso as unknown as typeof SpeechSynthesisUtterance);
     let actual = 0;
     const estados: (EstadoVoz | null)[] = [];
     const avisos: string[] = [];
@@ -167,11 +168,10 @@ describe('leer en voz alta', () => {
         actual++;
         queueMicrotask(() => lectura.cambioDePagina());
       },
-      voz: () => undefined,
+      locutor: () => narrador,
       velocidad: () => 1.2,
       alCambiar: (e) => estados.push(e),
       alAviso: (t) => avisos.push(t),
-      narrador: new Narrador(s, EnunciadoFalso as unknown as typeof SpeechSynthesisUtterance),
     });
     return { s, lectura, estados, avisos, pagina: () => actual };
   };

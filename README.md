@@ -106,6 +106,13 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   de lado, la vista la sigue. Al terminar la página, la hoja pasa sola con su sonido (en la PC, primero la de la
   derecha). Abajo: pausa, velocidad (0,8×, 1×, 1,2×, 1,5×), la voz (se elige tocando su nombre) y cerrar. Si pasas la
   hoja o saltas a otra página, sigue leyendo desde ahí. Las páginas sin texto (escaneadas) avisan que no se pueden leer.
+- **Voces de Entre Hojas** (`src/lectura/vozPropia.ts`, `src/lectura/voces.worker.ts`, `src/lectura/supertonic.ts`):
+  Lucía y Elena (mujer), Mateo y Andrés (hombre), en español latino. Son voces de Supertonic 3 que se generan en
+  el teléfono, sin internet, con ONNX Runtime Web en un Worker (la pantalla no se traba). La primera vez se bajan
+  (unos 145 MB, con su avance en el reproductor) y quedan guardadas. Mientras suena una oración ya se prepara la
+  siguiente; si el teléfono va lento, la voz usa menos pasos. Los números, las abreviaturas y los capítulos en
+  romanos se dicen en palabras (`src/lectura/numeros.ts`). Se eligieron por lo bien que se entienden: el mismo
+  párrafo con las 10 voces del modelo, transcrito con Whisper.
 - **Repaso del día** (`src/frases/repaso.ts`, `src/ui/RepasoDiario.tsx`): «Para recordar hoy» dice cuántas frases te
   tocan (hasta 10 al día). Tarjeta por tarjeta: «La recordaba» la manda a 3, 7, 14, 30 y 60 días; «Repasar de nuevo»,
   a mañana. Al terminar, los días seguidos que llevas.
@@ -122,6 +129,7 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
 
 ```bash
 npm install
+npm run voces      # baja las voces propias (145 MB) a public/voces/supertonic/ (una vez)
 npm run dev        # http://localhost:5173/Lectura/
 npm run typecheck  # tipos
 npm test           # pruebas (geometría de la hoja, del texto y de las marcas)
@@ -129,7 +137,7 @@ npm run build      # compila en dist/
 ```
 
 Cada push a `main` (o a una rama `claude/…`) pasa por GitHub Actions (`.github/workflows/publicar.yml`):
-revisa tipos, corre las pruebas, compila y publica en la rama `gh-pages`.
+baja las voces (con caché), revisa tipos, corre las pruebas, compila y publica en la rama `gh-pages`.
 
 El libro de muestra se genera con `node scripts/generar-muestra.cjs` (usa Playwright).
 
@@ -154,6 +162,10 @@ La maqueta es `diseno/propuesta-visual.html` (ábrela en el navegador). Para vol
   [Kenney](https://kenney.nl/assets/rpg-audio), CC0 1.0. Sonidos al marcar (`public/sonidos/`) y de fondo
   (`public/ambiente/`): generados con ElevenLabs para este proyecto. Ver `public/sonidos/LICENCIA.md` y
   `public/ambiente/LICENCIA.md`.
+- Voces propias: modelo Supertonic 3 de Supertone Inc. (BigScience Open RAIL-M, con restricciones de uso), versión
+  int8 de [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0); código de inferencia basado en el
+  ejemplo web de Supertonic (MIT); [ONNX Runtime Web](https://github.com/microsoft/onnxruntime) (MIT). Ver
+  `public/voces/LICENCIA.md`.
 - Libro de muestra (`public/muestra/`): texto de Cervantes (dominio público) compuesto con EB Garamond (OFL 1.1).
 - Íconos de la app (`public/icono.svg`, `public/iconos/`): propios.
 - Portadas de internet: se muestran desde [Open Library](https://openlibrary.org/dev/docs/api/covers) y

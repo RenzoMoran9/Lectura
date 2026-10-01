@@ -239,12 +239,30 @@ export interface Sintesis {
 
 export const hayVoz = () => typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
+export interface OpcionesDecir {
+  velocidad: number;
+  alTerminar: () => void;
+  alFallar: (error: string) => void;
+}
+
+/** Quien dice las oraciones: la voz del sistema (Narrador) o una voz propia de la app. */
+export interface Locutor {
+  /** Dentro de un toque: el navegador solo deja empezar a sonar así. */
+  despertar(): void;
+  decir(texto: string, o: OpcionesDecir): void;
+  callar(): void;
+  /** Deja lista la oración que viene (las voces propias tardan un poco en generarla). */
+  preparar?(texto: string, velocidad: number): void;
+}
+
 /**
- * Dice un texto y avisa al terminar. Cada `decir` deja sin efecto lo anterior: los avisos de un
- * texto cortado no llegan. Si el navegador no avisa que terminó (pasa en algunos celulares), se
- * nota porque ya no está hablando.
+ * Dice un texto con la voz del sistema y avisa al terminar. Cada `decir` deja sin efecto lo
+ * anterior: los avisos de un texto cortado no llegan. Si el navegador no avisa que terminó (pasa
+ * en algunos celulares), se nota porque ya no está hablando.
  */
-export class Narrador {
+export class Narrador implements Locutor {
+  /** La voz elegida (si no hay, la del sistema para español). */
+  voz?: SpeechSynthesisVoice;
   private turno = 0;
   private vigente: SpeechSynthesisUtterance | null = null; // (si no se guarda, Chrome puede perder el aviso de fin)
   private vigia: ReturnType<typeof setInterval> | undefined;
@@ -266,12 +284,13 @@ export class Narrador {
     }
   }
 
-  decir(texto: string, o: { voz?: SpeechSynthesisVoice; velocidad: number; alTerminar: () => void; alFallar: (error: string) => void }) {
+  decir(texto: string, o: OpcionesDecir) {
     this.parar();
     const turno = ++this.turno;
     const u = new this.Enunciado(texto);
-    u.lang = o.voz?.lang ?? 'es-ES';
-    if (o.voz) u.voice = o.voz;
+    const voz = this.voz;
+    u.lang = voz?.lang ?? 'es-ES';
+    if (voz) u.voice = voz;
     u.rate = o.velocidad;
     let listo = false;
     const terminar = (error?: string) => {
@@ -293,7 +312,7 @@ export class Narrador {
       if (Date.now() - inicio > 1500 && !this.s.speaking && !this.s.pending) terminar();
     }, 700);
     // Chrome en la computadora se calla a los ~15 s con las voces en línea: una pausa mínima lo evita.
-    if (o.voz && !o.voz.localService && !/android/i.test(globalThis.navigator?.userAgent ?? ''))
+    if (voz && !voz.localService && !/android/i.test(globalThis.navigator?.userAgent ?? ''))
       this.respiro = setInterval(() => {
         if (!this.s.speaking) return;
         this.s.pause();
@@ -342,13 +361,13 @@ export interface OpcionesLectura {
   total: () => number;
   /** Pasa la hoja hacia adelante (con su sonido). */
   pasar: () => void;
-  voz: () => SpeechSynthesisVoice | undefined;
+  /** Quién lee ahora (cambia si elijo otra voz). */
+  locutor: () => Locutor;
   velocidad: () => number;
   alCambiar: (e: EstadoVoz | null) => void;
   alAviso: (texto: string) => void;
   /** Cada vez que empieza una oración (la pantalla no se apaga mientras se escucha). */
   alHablar?: () => void;
-  narrador?: Narrador;
 }
 
 /** Con cuántas páginas seguidas sin texto (ilustraciones) se deja de leer. */
@@ -367,10 +386,18 @@ export class LecturaEnVoz {
   private pendiente: number | null = null;
   private espera: ReturnType<typeof setTimeout> | undefined;
   private reintento: ReturnType<typeof setTimeout> | undefined;
-  private n: Narrador;
+  /** El último que habló (para callarlo si cambio de voz). */
+  private ultimo: Locutor | null = null;
 
-  constructor(private o: OpcionesLectura) {
-    this.n = o.narrador ?? new Narrador();
+  constructor(private o: OpcionesLectura) {}
+
+  /** Quién habló por última vez. */
+  get enUso() {
+    return this.ultimo;
+  }
+
+  private callar() {
+    this.ultimo?.callar();
   }
 
   get activa() {
@@ -379,8 +406,8 @@ export class LecturaEnVoz {
 
   /** Empieza a leer en una página, desde la letra que diga `desde` (o desde arriba). */
   empezar(pagina: number, desde?: (t: TextoConMedida, ors: Oracion[]) => number) {
-    if (this.fase) this.n.callar();
-    this.n.despertar();
+    if (this.fase) this.callar();
+    this.o.locutor().despertar();
     this.pendiente = null;
     this.sinTexto = 0;
     this.fallos = 0;
@@ -391,14 +418,14 @@ export class LecturaEnVoz {
     if (!this.fase || this.fase === 'pausa') return;
     this.sesion++;
     clearTimeout(this.reintento);
-    this.n.callar();
+    this.callar();
     this.fase = 'pausa';
     this.emitir();
   }
 
   seguir() {
     if (this.fase !== 'pausa') return;
-    this.n.despertar();
+    this.o.locutor().despertar();
     this.fallos = 0;
     const p = this.pendiente;
     this.pendiente = null;
@@ -410,7 +437,7 @@ export class LecturaEnVoz {
   repetir() {
     if (this.fase !== 'leyendo') return;
     this.sesion++;
-    this.n.callar();
+    this.callar();
     this.despues(() => this.hablar());
   }
 
@@ -418,7 +445,7 @@ export class LecturaEnVoz {
     this.sesion++;
     clearTimeout(this.espera);
     clearTimeout(this.reintento);
-    if (this.fase) this.n.callar();
+    if (this.fase) this.callar();
     this.fase = null;
     this.texto = null;
     this.pendiente = null;
@@ -440,7 +467,7 @@ export class LecturaEnVoz {
     }
     clearTimeout(this.reintento);
     this.sesion++;
-    this.n.callar();
+    this.callar();
     this.despues(() => void this.cargar(p));
   }
 
@@ -495,9 +522,12 @@ export class LecturaEnVoz {
     this.fase = 'leyendo';
     this.emitir();
     this.o.alHablar?.();
-    this.n.decir(o.texto, {
-      voz: this.o.voz(),
-      velocidad: this.o.velocidad(),
+    const loc = this.o.locutor();
+    if (this.ultimo && this.ultimo !== loc) this.ultimo.callar();
+    this.ultimo = loc;
+    const velocidad = this.o.velocidad();
+    loc.decir(o.texto, {
+      velocidad,
       alTerminar: () => {
         if (sesion !== this.sesion) return;
         this.fallos = 0;
@@ -516,6 +546,24 @@ export class LecturaEnVoz {
         this.hablar();
       },
     });
+    // Mientras suena, la que viene ya se va preparando (también la primera de la página siguiente).
+    if (loc.preparar) {
+      const sig = this.ors[this.i + 1];
+      if (sig) loc.preparar(sig.texto, velocidad);
+      else void this.prepararPaginaSiguiente(loc, velocidad);
+    }
+  }
+
+  private async prepararPaginaSiguiente(loc: Locutor, velocidad: number) {
+    const p = this.pagina + 1;
+    if (p >= this.o.total()) return;
+    try {
+      const t = await this.o.texto(p);
+      const primera = t?.texto.tieneTexto ? oraciones(t.texto)[0] : undefined;
+      if (primera) loc.preparar?.(primera.texto, velocidad);
+    } catch {
+      /* se prepara al llegar */
+    }
   }
 
   private finDePagina() {
