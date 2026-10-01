@@ -19,6 +19,10 @@ export interface Ajustes {
   panelFrases: boolean;
   /** Volumen del sonido de fondo (playa, lluvia, terror…), 0..1. */
   volumenAmbiente: number;
+  /** Luz del papel: sola según la hora, o a mano con brillo (0.6..1) y tibieza (0..1). */
+  luzAuto: boolean;
+  brillo: number;
+  tibieza: number;
   /** Leer con el texto a todo el ancho de la pantalla (doble toque para cambiar). */
   ajusteTexto: boolean;
   /** Buscar sola la portada original de cada libro en Open Library y Google Books. */
@@ -41,6 +45,9 @@ export const useAjustes = create<Ajustes>()(
       panelFrases: true,
       volumenAmbiente: 0.6,
       ajusteTexto: false,
+      luzAuto: true,
+      brillo: 1,
+      tibieza: 0,
       portadasEnLinea: true,
       sinAvisoInstalar: false,
       poner: (cambios) => set(cambios),

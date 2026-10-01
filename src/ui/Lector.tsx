@@ -31,12 +31,15 @@ import { Pasador, type Pase } from '../hoja/pasador';
 import { acercarEn, aLienzo, conZoom, desplazable, encuadrar, limitar, SIN_ZOOM, zoomAlTexto, type Encuadre, type Zoom } from '../hoja/zoom';
 import { capituloDe, leerCapitulos, type Capitulo } from '../pdf/indice';
 import type { TipoTrazo } from '../sonido/sonido';
+import { coincidencias } from '../lectura/buscar';
+import { luzActual } from '../lectura/luz';
 import { abrirPdf, bytesLeidos, cerrarPdf, type DocumentoPdf } from '../pdf/pdf';
 import { Paginas } from '../pdf/paginas';
 import { ambiente } from '../sonido/ambiente';
 import { sonido } from '../sonido/sonido';
 import { AvisoBreve, AvisoModo, type Mensaje } from './Avisos';
 import { Icono } from './Icono';
+import { BuscarLibro, type Resultado } from './BuscarLibro';
 import { Indice } from './Indice';
 import { MenuEsquina } from './MenuEsquina';
 import { PanelFrases } from './PanelFrases';
@@ -59,6 +62,8 @@ const PANEL = 340; // ancho del panel de Mis frases
  */
 type Ajuste = 'pagina' | 'texto' | 'libre';
 type Donde = 'arriba' | 'abajo' | { px: number; py: number };
+/** Un rectángulo de una página, en fracciones de la página (0..1, desde arriba a la izquierda). */
+type Rango = { x0: number; y0: number; x1: number; y1: number };
 const BARRA_ARRIBA = 52;
 const BARRA_ABAJO = 56;
 
@@ -93,7 +98,12 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const [regreso, setRegreso] = useState<{ pagina: number; cy?: number } | null>(null);
   const [indiceAbierto, setIndiceAbierto] = useState(false);
   const [pasando, setPasando] = useState(false);
-  const [destello, setDestello] = useState<{ x: number; y: number; w: number; h: number; clave: number } | null>(null);
+  const [destellos, setDestellos] = useState<{ rects: { x: number; y: number; w: number; h: number }[]; clave: number } | null>(null);
+  const [buscarAbierto, setBuscarAbierto] = useState(false);
+  const luzAuto = useAjustes((s) => s.luzAuto);
+  const brillo = useAjustes((s) => s.brillo);
+  const tibieza = useAjustes((s) => s.tibieza);
+  const [reloj, setReloj] = useState(() => Date.now());
   const [ritmo, setRitmo] = useState<Ritmo | undefined>(undefined);
   const marcaLectura = useLibros((s) => s.libros.find((l) => l.id === libroId)?.marcador);
   const cerrarMensaje = useCallback(() => setMensaje(null), []);
@@ -110,7 +120,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const pasesDesdeSalto = useRef(0);
   /** Altura de la página (0..1) a la que hay que llevar la vista cuando la página esté lista. */
   const cyPendiente = useRef<number | null>(null);
-  const destelloPendiente = useRef(false);
+  /** Algo que debe brillar al llegar a su página: la línea del marcador o la palabra buscada. */
+  const destelloPendiente = useRef<{ pagina: number; rects: Rango[]; mensaje?: string } | null>(null);
   const ritmoRef = useRef<Ritmo | undefined>(undefined);
   const inicioPagina = useRef(performance.now());
   const capitulosRef = useRef<Capitulo[]>([]);
@@ -163,7 +174,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         setRegreso(regresoRef.current);
       } else if (m && m.pagina === inicial) {
         cyPendiente.current = (m.y0 + m.y1) / 2;
-        destelloPendiente.current = true;
+        destelloPendiente.current = { pagina: m.pagina, rects: [m], mensaje: 'Aquí te quedaste' };
       } else if (av?.cy != null && inicial === av.pagina) cyPendiente.current = av.cy;
       listoRef.current = true;
       setLibro(l);
@@ -443,7 +454,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   };
 
   /** Rectángulo en la pantalla de la línea marcada (si su página está a la vista). */
-  const rectMarcaPantalla = (m: MarcaLectura) => {
+  const rectMarcaPantalla = (m: Rango & { pagina: number }) => {
     const d = dispRef.current;
     const r = paginas.current?.rectPagina(m.pagina);
     if (!d || !r || !visibles().includes(m.pagina)) return null;
@@ -469,16 +480,15 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const ubicarCintaRef = useRef(ubicarCinta);
   ubicarCintaRef.current = ubicarCinta;
 
-  /** Al abrir el libro en la página del marcador, la línea brilla un momento. */
+  /** Al llegar a la página del marcador (o de lo buscado), esa línea brilla un momento. */
   const mostrarDestello = () => {
-    const m = marcadorRef.current;
-    if (!destelloPendiente.current || !m || m.pagina !== paginaRef.current || !paginas.current?.obtener(m.pagina)) return;
-    destelloPendiente.current = false;
+    const p = destelloPendiente.current;
+    if (!p || !visibles().includes(p.pagina) || !paginas.current?.obtener(p.pagina)) return;
+    destelloPendiente.current = null;
     window.setTimeout(() => {
-      const rs = rectMarcaPantalla(m);
-      if (!rs) return;
-      setDestello({ x: rs.x, y: rs.y, w: rs.w, h: rs.h, clave: Date.now() });
-      setMensaje({ texto: 'Aquí te quedaste', clave: Date.now() });
+      const rects = p.rects.map((r) => rectMarcaPantalla({ pagina: p.pagina, ...r })).filter((r) => !!r);
+      if (rects.length) setDestellos({ rects, clave: Date.now() });
+      if (p.mensaje) setMensaje({ texto: p.mensaje, clave: Date.now() });
     }, 350);
   };
 
@@ -1041,6 +1051,13 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagina, doc, libro, anotar, regreso, capitulos]);
 
+  // La luz del papel sigue a la hora: se revisa cada minuto.
+  useEffect(() => {
+    if (!luzAuto) return;
+    const t = window.setInterval(() => setReloj(Date.now()), 60e3);
+    return () => clearInterval(t);
+  }, [luzAuto]);
+
   // La pantalla no se apaga mientras leo. Si nadie la toca en 10 minutos (me quedé dormido), sí.
   useEffect(() => {
     let candado: WakeLockSentinel | null = null;
@@ -1198,7 +1215,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const irAlMarcador = () => {
     const m = marcadorRef.current;
     if (!m) return;
-    destelloPendiente.current = true;
+    destelloPendiente.current = { pagina: m.pagina, rects: [m], mensaje: 'Aquí te quedaste' };
     if (m.pagina === paginaRef.current) {
       cyPendiente.current = (m.y0 + m.y1) / 2;
       aplicarCyPendiente();
@@ -1290,6 +1307,52 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   };
   const cancelar = (e: React.PointerEvent) => gestos.current?.cancelar(e.pointerId);
 
+  const luz = luzActual({ luzAuto, brillo, tibieza }, new Date(reloj));
+
+  // El grosor del libro sobre la mesa: los cantos de las hojas leídas a la izquierda y de las que
+  // faltan a la derecha (en px, sin zoom). Un libro de 500 páginas tiene unos 21 px de hojas.
+  const grosor = Math.min(26, 3 + 18 * Math.sqrt((doc?.numPages ?? 0) / 500));
+  let cantoIzq = 0;
+  let cantoDer = 0;
+  if (doc && pagina !== null && disp?.modo === 'doble') {
+    const { izquierda, derecha } = pliego(pagina);
+    const f = Math.max(0, Math.min(1, (izquierda + 1) / doc.numPages));
+    cantoIzq = izquierda >= 0 ? Math.max(1.5, grosor * f) : 0;
+    cantoDer = derecha < doc.numPages ? Math.max(1.5, grosor * (1 - f)) : 0;
+  } else if (doc && pagina !== null && disp?.modo === 'mesa') cantoDer = Math.max(1.5, grosor * (1 - pagina / doc.numPages));
+
+  /** Desde «Buscar»: ir a la página (pudiendo volver) y que la palabra brille al llegar. */
+  const irAResultado = async (r: Resultado, consulta: string) => {
+    const d = docActual.current;
+    let rects: Rango[] = [];
+    try {
+      const guardado = textos.current.get(r.pagina);
+      const t = guardado && guardado !== 'leyendo' ? guardado : await leerTextoPagina(await d!.getPage(r.pagina + 1));
+      textos.current.set(r.pagina, t);
+      const c = coincidencias(t.letras.map((l) => (l.virtual ? ' ' : l.c)).join(''), consulta)[r.orden];
+      const ub = paginas.current?.ubicacion(r.pagina) ?? paginas.current?.ubicacion(paginaRef.current);
+      if (c && ub) {
+        // Un rectángulo por renglón de la coincidencia.
+        const porRenglon = new Map<number, Rango>();
+        for (const l of t.letras.slice(c.inicio, c.fin)) {
+          if (l.virtual) continue;
+          const a = porRenglon.get(l.linea);
+          const x0 = l.x0 / ub.ancho;
+          const x1 = l.x1 / ub.ancho;
+          const y0 = l.top / ub.alto;
+          const y1 = l.bottom / ub.alto;
+          porRenglon.set(l.linea, a ? { x0: Math.min(a.x0, x0), x1: Math.max(a.x1, x1), y0: Math.min(a.y0, y0), y1: Math.max(a.y1, y1) } : { x0, x1, y0, y1 });
+        }
+        rects = [...porRenglon.values()];
+      }
+    } catch {
+      /* sin capa de texto: se va a la página igual */
+    }
+    if (rects.length) destelloPendiente.current = { pagina: r.pagina, rects };
+    irA(r.pagina, { cy: rects.length ? (rects[0].y0 + rects[0].y1) / 2 : undefined });
+    mostrarDestello();
+  };
+
   const total = doc?.numPages ?? 0;
   const noche = papel === 'noche';
   const mostrada = saltoA ?? pagina ?? 0;
@@ -1325,7 +1388,11 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         onContextMenu={(e) => e.preventDefault()}
       >
         {enMesa && disp && (
-          <div ref={sombraLibro} className="sombra-hoja" style={{ width: disp.libro.w, height: disp.libro.h, transform: `translate(${disp.libro.x}px, ${disp.libro.y}px)` }} />
+          <div ref={sombraLibro} className="sombra-hoja" style={{ width: disp.libro.w, height: disp.libro.h, transform: `translate(${disp.libro.x}px, ${disp.libro.y}px)` }}>
+            {disp.modo === 'doble' && <div className="tapa" style={{ left: -cantoIzq - 6, right: -cantoDer - 6 }} />}
+            {cantoIzq > 0 && <div className="canto canto-izq" style={{ width: cantoIzq }} />}
+            {cantoDer > 0 && <div className="canto canto-der" style={{ width: cantoDer }} />}
+          </div>
         )}
         <canvas ref={lienzo} className="lienzo-hoja" />
         {disp && (
@@ -1337,15 +1404,18 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
         )}
         {/* La cinta del marcador, en el borde de la hoja (se esconde mientras la hoja se pasa). */}
         <div ref={cintaRef} className="cinta-lectura" style={{ display: 'none' }} aria-hidden="true" />
-        {destello && (
+        {destellos?.rects.map((r, k) => (
           <div
-            key={destello.clave}
+            key={`${destellos.clave}-${k}`}
             className="destello"
-            style={{ left: destello.x - 6, top: destello.y - 4, width: destello.w + 12, height: destello.h + 8 }}
-            onAnimationEnd={() => setDestello(null)}
+            style={{ left: r.x - 6, top: r.y - 4, width: r.w + 12, height: r.h + 8 }}
+            onAnimationEnd={() => k === destellos.rects.length - 1 && setDestellos(null)}
             aria-hidden="true"
           />
-        )}
+        ))}
+        {/* Luz del papel: de noche, más cálida y tenue (como bajo una lámpara). */}
+        <div className="luz-papel" style={{ opacity: luz.tibieza * 0.34 }} aria-hidden="true" />
+        <div className="luz-tenue" style={{ opacity: (1 - luz.brillo) * 0.9 }} aria-hidden="true" />
         {!error && (!doc || !dibujada) && <div className={`cargando ${noche || enMesa ? 'claro' : ''}`}>{doc ? 'Dibujando la página…' : 'Abriendo el libro…'}</div>}
       </div>
 
@@ -1363,6 +1433,9 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
           <Icono nombre="chevron-left" tam={20} /> {desde === 'frases' ? 'Mis frases' : 'Estante'}
         </button>
         <div className="cromo-titulo">{enMesa ? tituloBarra : libro?.titulo}</div>
+        <button className="icono-barra" onClick={() => setBuscarAbierto(true)} aria-label="Buscar en el libro" title="Buscar en el libro">
+          <Icono nombre="search" tam={19} />
+        </button>
         <button className="icono-barra" onClick={() => setIndiceAbierto(true)} aria-label="Índice" title="Índice">
           <Icono nombre="lista" tam={20} />
         </button>
@@ -1455,6 +1528,18 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       )}
 
       {panel && <PapelYSonido libroId={libroId} alCerrar={() => setPanel(false)} />}
+      {buscarAbierto && doc && (
+        <BuscarLibro
+          doc={docActual.current ?? doc}
+          libroId={libroId}
+          capitulos={capitulos}
+          alIr={(r, consulta) => {
+            setBuscarAbierto(false);
+            void irAResultado(r, consulta);
+          }}
+          alCerrar={() => setBuscarAbierto(false)}
+        />
+      )}
       {indiceAbierto && (
         <Indice
           capitulos={capitulos}

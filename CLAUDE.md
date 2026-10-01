@@ -24,6 +24,8 @@ La uso sobre todo desde el celular, y también desde la computadora.
    - crema;
    - antiguo (amarillento, con bordes tostados, como un libro viejo);
    - noche.
+
+   **Luz del papel:** de noche se pone más cálida y tenue sola (desde las 18 h), o a mano con «Brillo» y «Tibieza».
 5. **Menú discreto en círculo.** Es un botón chico y semitransparente en una esquina, que puedo mover. No tapa la lectura. Al tocarlo se abre en abanico con:
    - resaltador (5 colores);
    - lápiz para encerrar frases (yo normalmente encierro las frases);
@@ -39,6 +41,7 @@ La uso sobre todo desde el celular, y también desde la computadora.
    - Si voy a ver una frase, el índice u otra página, mi lugar no se pierde: aparece «Volver a la pág. … · donde ibas». Si sigo leyendo desde ahí (dos hojas), ese pasa a ser mi lugar.
 8. **Índice y cuánto falta.** El índice del PDF (si lo trae) con el marcador arriba, los capítulos leídos marcados y el actual con su avance. Abajo, el tiempo que me falta para terminar el capítulo y el libro, según mi ritmo de lectura.
 9. **La pantalla no se apaga** mientras leo (sí, si nadie la toca en 10 minutos).
+10. **Buscar en el libro** una palabra o frase, sin importar tildes ni mayúsculas: resultados con página, capítulo y fragmento; al tocar uno, la palabra brilla y puedo volver a donde iba.
 
 ## Lo que NO va (por ahora)
 Tienda de libros, botones de compartir, notas largas, conversión a EPUB y reacomodar el texto del PDF.
@@ -68,6 +71,7 @@ Pantallas:
 7. **Computadora.**
    - Libro abierto a doble página sobre una mesa en penumbra.
    - La esquina de la hoja se levanta con el mouse.
+   - Se ve el grosor del libro: los cantos de las hojas leídas a la izquierda y de las que faltan a la derecha, y la tapa alrededor.
    - Panel lateral con Mis frases.
    - Barra inferior para saltar de página.
 
@@ -166,4 +170,3 @@ Pantallas:
 - Exportar mis frases.
 - OCR para PDFs escaneados.
 - Marcadores del PDF (el índice ya está).
-- Brillo y tibieza del papel.

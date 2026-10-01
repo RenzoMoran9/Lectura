@@ -89,6 +89,12 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   falta para terminar el capítulo y el libro; las rayitas de la barra de abajo son los capítulos.
 - **Pantalla encendida** mientras lees (Wake Lock); si nadie la toca en 10 minutos, se deja apagar.
 - **Sonido al marcar**: lápiz, resaltador y goma, con el volumen que sigue la velocidad del dedo.
+- **Buscar en el libro** (`src/lectura/buscar.ts`, `src/ui/BuscarLibro.tsx`): recorre el texto de las páginas sin
+  importar tildes, mayúsculas ni palabras cortadas con guion; los resultados salen a medida que se encuentran. Al tocar
+  uno, la palabra brilla en su página y aparece «Volver a donde ibas». Los PDF escaneados no tienen texto que buscar.
+- **Luz del papel** (`src/lectura/luz.ts`): de noche el papel se entibia y baja un poco el brillo (desde las 18 h,
+  hasta la mañana), o a mano con «Brillo» y «Tibieza» en «Papel y sonido».
+- **Grosor del libro** en la PC: los cantos de las hojas a cada lado crecen y se adelgazan mientras avanzas.
 
 ## Desarrollo
 

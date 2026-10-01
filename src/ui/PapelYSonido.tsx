@@ -4,6 +4,7 @@
 import { useAjustes } from '../estado/ajustes';
 import { useLibros } from '../estado/libros';
 import { PAPELES, TIPOS_PAPEL } from '../hoja/papel';
+import { luzActual } from '../lectura/luz';
 import { AMBIENTES, type TipoAmbiente } from '../sonido/ambiente';
 import { sonido } from '../sonido/sonido';
 import { Icono, type NombreIcono } from './Icono';
@@ -20,7 +21,9 @@ function Ambiente({ id, nombre, icono, on, alElegir }: { id: string; nombre: str
 }
 
 export function PapelYSonido({ libroId, alCerrar }: { libroId: string; alCerrar: () => void }) {
-  const { papel, sonido: conSonido, volumen, juego, volumenAmbiente, poner } = useAjustes();
+  const { papel, sonido: conSonido, volumen, juego, volumenAmbiente, luzAuto, brillo, tibieza, poner } = useAjustes();
+  const luz = luzActual({ luzAuto, brillo, tibieza });
+  const hora = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
   const elegido = useLibros((s) => s.libros.find((l) => l.id === libroId)?.ambiente ?? null);
   const actualizar = useLibros((s) => s.actualizar);
   const elegir = (tipo: TipoAmbiente | null) => {
@@ -49,6 +52,47 @@ export function PapelYSonido({ libroId, alCerrar }: { libroId: string; alCerrar:
             </button>
           ))}
         </div>
+        <div className="sep" />
+        <div className="eti-sec">Luz del papel</div>
+        <label className="fila-aj">
+          <Icono nombre="luna" tam={20} />
+          <span>Más cálida y tenue de noche</span>
+          <input type="checkbox" role="switch" className="switch" checked={luzAuto} onChange={(e) => poner({ luzAuto: e.target.checked })} />
+        </label>
+        <div className={`vol luz ${luzAuto ? 'apagado' : ''}`}>
+          <small>Brillo</small>
+          <input
+            type="range"
+            min={0.6}
+            max={1}
+            step={0.01}
+            value={luz.brillo}
+            disabled={luzAuto}
+            style={{ '--v': `${((luz.brillo - 0.6) / 0.4) * 100}%` } as React.CSSProperties}
+            onChange={(e) => poner({ brillo: Number(e.target.value) })}
+            aria-label="Brillo del papel"
+          />
+        </div>
+        <div className={`vol luz tibieza ${luzAuto ? 'apagado' : ''}`}>
+          <small>Tibieza</small>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={luz.tibieza}
+            disabled={luzAuto}
+            style={{ '--v': `${luz.tibieza * 100}%` } as React.CSSProperties}
+            onChange={(e) => poner({ tibieza: Number(e.target.value) })}
+            aria-label="Tibieza del papel"
+          />
+        </div>
+        {luzAuto && (
+          <p className="nota-luz">
+            Ahora ({hora}) se ajusta sola: desde las 18 h el papel se entibia poco a poco, y vuelve a la luz del día por la mañana.
+          </p>
+        )}
+
         <div className="sep" />
         <label className="fila-aj">
           <Icono nombre="volume-2" tam={20} />

@@ -138,7 +138,24 @@ button:disabled { cursor: default; }
 /* Donde no hay página (junto a la portada o tras la última) se ve el cartón de las tapas. */
 .en-doble .sombra-hoja {
   background: linear-gradient(90deg, #4f171a, #6a2125 48%, #4a1518 50%, #6a2125 52%, #4f171a), #5e1d20;
-  border-radius: 3px; box-shadow: 0 0 0 5px #6d2226, 0 0 0 6px rgba(0, 0, 0, .4), 0 34px 70px -18px rgba(0, 0, 0, .8), 0 8px 22px rgba(0, 0, 0, .4); }
+  border-radius: 3px; isolation: isolate; box-shadow: 0 34px 70px -18px rgba(0, 0, 0, .8), 0 8px 22px rgba(0, 0, 0, .4); }
+/* La tapa: el cartón forrado que asoma alrededor de las hojas (y de sus cantos). */
+.tapa {
+  position: absolute; top: -6px; bottom: -6px; z-index: -1; border-radius: 4px;
+  background: linear-gradient(180deg, #74262a, #6a2125 40%, #5d1c20), #6d2226;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .4), inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+/* Los cantos de las hojas: muchas hojas finas apiladas, con sombra hacia afuera. */
+.canto {
+  position: absolute; top: 1px; bottom: 1px; pointer-events: none;
+  --c1: #F3EAD8; --c2: #D3C5A9;
+  background: var(--sombra), repeating-linear-gradient(90deg, var(--c1) 0 0.9px, var(--c2) 0.9px 1.6px);
+}
+.canto-izq { right: 100%; border-radius: 2px 0 0 2px; --sombra: linear-gradient(90deg, rgba(40, 25, 10, .5), rgba(40, 25, 10, .05) 75%, rgba(0, 0, 0, .18)); }
+.canto-der { left: 100%; border-radius: 0 2px 2px 0; --sombra: linear-gradient(270deg, rgba(40, 25, 10, .5), rgba(40, 25, 10, .05) 75%, rgba(0, 0, 0, .18)); }
+.papel-fondo-blanco .canto { --c1: #FBFAF6; --c2: #D9D4C9; }
+.papel-fondo-antiguo .canto { --c1: #E9D6AE; --c2: #BFA374; }
+.papel-fondo-noche .canto { --c1: #3A352F; --c2: #221F1B; }
 .lector.con-zoom .lector-hoja { cursor: grab; }
 .quitar-zoom {
   position: absolute; z-index: 13; left: 50%; transform: translateX(-50%); bottom: calc(var(--seguro-abajo) + 18px);
@@ -535,3 +552,24 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: 0; bo
 .falta-t { display: block; }
 .seguir .marca-texto { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cromo-arriba:not(.fijo) .icono-barra { color: var(--tinta); background: rgba(60, 40, 20, .07); }
+
+/* ---------- luz del papel ---------- */
+.vol.luz { margin: 10px 0 0 30px; }
+.vol.luz small { width: 52px; }
+.vol.tibieza input[type="range"]::-webkit-slider-runnable-track { background: linear-gradient(90deg, #c27a3a var(--v), rgba(60, 40, 20, .15) var(--v)); }
+.vol.tibieza input[type="range"]::-moz-range-track { background: linear-gradient(90deg, #c27a3a var(--v), rgba(60, 40, 20, .15) var(--v)); }
+.nota-luz { font: 500 12px/1.45 "DM Sans"; color: var(--tinta-3); margin: 8px 0 0 30px; }
+.luz-papel, .luz-tenue { position: absolute; inset: 0; pointer-events: none; z-index: 2; transition: opacity 1.2s; }
+.luz-papel { background: rgb(255, 190, 120); mix-blend-mode: multiply; }
+.luz-tenue { background: #000; }
+
+/* ---------- buscar en el libro ---------- */
+.buscar-libro { min-height: min(70dvh, 560px); }
+.buscar-libro h3 { margin-bottom: 4px; }
+.buscar-libro .buscar { margin-top: 8px; }
+.buscar-estado { font: 500 12.5px/1.4 "DM Sans"; color: var(--tinta-2); margin: 10px 2px 6px; min-height: 18px; }
+.resultados { display: grid; }
+.resultado { display: block; width: 100%; text-align: left; padding: 10px 2px; border-bottom: 1px solid rgba(60, 40, 20, .08); }
+.resultado-pag { display: block; font: 600 11px "DM Sans"; letter-spacing: .06em; text-transform: uppercase; color: var(--cinta); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.resultado-t { display: block; margin-top: 3px; font: 400 16px/1.38 "EB Garamond", Georgia, serif; color: var(--tinta); overflow-wrap: break-word; }
+.resultado-t mark { background: rgba(255, 212, 38, .6); color: inherit; border-radius: 2px; padding: 0 1px; }
