@@ -5,10 +5,13 @@ import { esLapiz, LAPICES, RESALTADORES, type Frase } from './modelo';
 
 const fecha = (t: number) => new Date(t).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
 
+const lapiz = (f: Frase) => (esLapiz(f.color) ? LAPICES[f.color].nombre : 'grafito').toLowerCase();
 const marca = (f: Frase) =>
   f.tipo === 'encerrado'
-    ? `encerrada con lápiz ${(esLapiz(f.color) ? LAPICES[f.color].nombre : 'grafito').toLowerCase()}`
-    : `resaltada en ${(esLapiz(f.color) ? LAPICES[f.color].nombre : RESALTADORES[f.color].nombre).toLowerCase()}`;
+    ? `encerrada con lápiz ${lapiz(f)}`
+    : f.tipo === 'recuadro'
+      ? `en un recuadro, lápiz ${lapiz(f)}`
+      : `resaltada en ${(esLapiz(f.color) ? LAPICES[f.color].nombre : RESALTADORES[f.color].nombre).toLowerCase()}`;
 
 export function textoParaExportar(
   frases: Frase[],

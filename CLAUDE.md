@@ -29,10 +29,11 @@ La uso sobre todo desde el celular, y también desde la computadora.
 5. **Menú discreto en círculo.** Es un botón chico y semitransparente en una esquina, que puedo mover. No tapa la lectura. Al tocarlo se abre en abanico con:
    - resaltador (5 colores);
    - lápiz para encerrar frases (yo normalmente encierro las frases);
+   - recuadro, como una captura: arrastro de una esquina a la otra y se guarda lo que queda dentro (en la página quedan sus cuatro esquinas a lápiz);
    - borrador;
    - papel;
    - Mis frases.
-6. **Mis frases.** Todo lo que resalto o encierro se guarda solo, con el texto, el libro, la página, la fecha y el color, en un espacio aparte para revisarlo y hacer memoria.
+6. **Mis frases.** Todo lo que resalto, encierro o capturo con el recuadro se guarda solo, con el texto, el libro, la página, la fecha y el color, en un espacio aparte para revisarlo y hacer memoria.
    - Al tocar una frase, me lleva a su página.
    - «Repasar» me muestra frases al azar.
 7. **Recordar dónde me quedé** en cada libro y abrirlo ahí.
@@ -46,7 +47,7 @@ La uso sobre todo desde el celular, y también desde la computadora.
     - Voces de Entre Hojas, en español latino y gratis: **Lucía** y **Elena** (mujer), **Mateo** y **Andrés** (hombre). Se bajan una vez (unos 145 MB) y después funcionan sin internet. También están las voces en español del celular.
 12. **Repaso del día, tipo tarjetas.** «Para recordar hoy» avisa cuántas frases tocan. Las que recuerdo vuelven en 3, 7, 14… días; las otras, mañana. Cuenta los días seguidos.
 13. **Nota en una frase** (corta, hasta 280 letras) y **exportar Mis frases** en un archivo de texto, agrupadas por libro.
-14. **Compartir una frase con marco.** Botón «Compartir» en cada frase (Mis frases, repasos y panel de la PC). Se elige entre 5 marcos (clásico, antiguo, noche, cuaderno y flor seca) y sale una imagen vertical para estados e historias (1080 × 1920), con la marca de la frase, el libro, el autor y la página. «Guardar imagen» la baja al teléfono; «Compartir» abre WhatsApp, Instagram o la app que elija.
+14. **Compartir una frase con marco.** Botón «Compartir» en cada frase (Mis frases, repasos y panel de la PC). Se elige entre 5 marcos (clásico, antiguo, noche, cuaderno y flor seca) y sale una imagen vertical para estados e historias (1080 × 1920), solo con el texto de la frase bien escrito (sin el resaltador ni el lápiz), el libro, el autor y la página; el texto se puede corregir antes de compartir. Después de un recuadro, el aviso «Guardada en Mis frases» trae «Compartir». «Guardar imagen» la baja al teléfono; «Compartir» abre WhatsApp, Instagram o la app que elija.
 
 ## Lo que NO va (por ahora)
 Tienda de libros, notas largas, conversión a EPUB y reacomodar el texto del PDF.
@@ -131,7 +132,7 @@ Pantallas:
   - Sonido de fondo opcional mientras se lee, elegido para cada libro: para relajarse (playa, bosque y fogata, lluvia) o según el género (terror, suspenso, drama, acción), con su propio volumen.
 - **Gestos:**
   - En modo lectura, el dedo pasa las hojas.
-  - En modo resaltar o encerrar, el dedo marca y la hoja no se pasa (aviso arriba con «Listo» para salir).
+  - En modo resaltar, encerrar o recuadro, el dedo marca y la hoja no se pasa (aviso arriba con «Listo» para salir).
   - Se pellizca para acercar. Con zoom, arriba y abajo mueve la página y a los lados la pasa (cuando ya se ve el borde del texto); el zoom se mantiene en la página siguiente.
   - Doble toque: el texto a todo el ancho de la pantalla (se recortan los márgenes blancos, sin cortar el texto) o vuelve a la página entera. Un pellizco que queda cerca de ese ancho se acomoda justo en él.
   - Celular de lado: la página va a todo el ancho y se lee deslizando hacia abajo.
@@ -155,7 +156,7 @@ Pantallas:
    - Sonido de papel.
    - Los 4 papeles.
    - Recordar la página.
-2. **Menú de la esquina.** Resaltador (5 colores), lápiz para encerrar, borrador, Mis frases con «Ir a la página» y «Repasar».
+2. **Menú de la esquina.** Resaltador (5 colores), lápiz para encerrar, recuadro, borrador, Mis frases con «Ir a la página» y «Repasar».
 3. **Estante.**
    - Varios libros con portada y avance.
    - Doble página en la PC.

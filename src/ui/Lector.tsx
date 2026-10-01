@@ -8,7 +8,7 @@ import { guardarAvance, leerAvance, obtenerLibro, type Avance, type Libro } from
 import { useAjustes } from '../estado/ajustes';
 import { useFrases } from '../estado/frases';
 import { useLibros } from '../estado/libros';
-import { dibujarFrase, lienzoDeMarcas } from '../frases/dibujo';
+import { dibujarFrase, lienzoDeMarcas, recuadroEnCurso } from '../frases/dibujo';
 import { Marcador, type Previa } from '../frases/marcador';
 import type { Frase } from '../frases/modelo';
 import { leerTextoPagina, letraEn, type TextoPagina } from '../frases/texto';
@@ -40,6 +40,7 @@ import { Paginas } from '../pdf/paginas';
 import { ambiente } from '../sonido/ambiente';
 import { sonido } from '../sonido/sonido';
 import { AvisoBreve, AvisoModo, type Mensaje } from './Avisos';
+import { CompartirFrase } from './CompartirFrase';
 import { Icono } from './Icono';
 import { BuscarLibro, type Resultado } from './BuscarLibro';
 import { Indice } from './Indice';
@@ -95,6 +96,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
   const [dibujada, setDibujada] = useState(false);
   const [saltoA, setSaltoA] = useState<number | null>(null);
   const [mensaje, setMensaje] = useState<Mensaje | null>(null);
+  const [compartirDe, setCompartirDe] = useState<Frase | null>(null);
   const [hayZoom, setHayZoom] = useState(false);
   const [capitulos, setCapitulos] = useState<Capitulo[]>([]);
   const [ajuste, setAjuste] = useState<Ajuste>(() => (useAjustes.getState().ajusteTexto ? 'texto' : 'pagina'));
@@ -768,7 +770,8 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       herramienta: () => useFrases.getState().herramienta,
       color: () => {
         const a = useAjustes.getState();
-        return useFrases.getState().herramienta === 'lapiz' ? a.colorLapiz : a.colorResaltador;
+        const h = useFrases.getState().herramienta;
+        return h === 'lapiz' || h === 'recuadro' ? a.colorLapiz : a.colorResaltador;
       },
       libroId: () => libro.id,
       pagina: () => marcaPagina.current?.indice ?? paginaRef.current,
@@ -788,15 +791,18 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
       },
       previa: (pv) => dibujarPrevia(pv),
       guardar: (f, donde) => {
-        void useFrases.getState().agregar({ ...f, libroTitulo: libro.titulo });
+        const nueva = { ...f, libroTitulo: libro.titulo };
+        void useFrases.getState().agregar(nueva);
         // La marca ya quedó en la página: la vista previa se borra en cuanto se dibuja.
         requestAnimationFrame(() => requestAnimationFrame(() => dibujarPrevia(null)));
         const r = contenedor.current?.getBoundingClientRect();
         const rect = marcaPagina.current?.rect ?? dispRef.current?.hoja;
         const z = zoomRef.current;
+        const x = (r?.left ?? 0) + z.x + z.z * ((rect?.x ?? 0) + donde.x);
         setMensaje({
           texto: 'Guardada en Mis frases',
-          x: (r?.left ?? 0) + z.x + z.z * ((rect?.x ?? 0) + donde.x),
+          // El recuadro es una captura: se puede compartir al tiro.
+          ...(f.tipo === 'recuadro' ? { accion: { texto: 'Compartir', icono: 'share' as const, hacer: () => setCompartirDe(nueva) }, x: x - 150 } : { x }),
           y: (r?.top ?? 0) + z.y + z.z * ((rect?.y ?? 0) + donde.y),
           clave: Date.now(),
         });
@@ -1176,10 +1182,10 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     };
   }, [ambienteLibro]);
 
-  // Con el resaltador o el lápiz se lee la capa de texto de las páginas visibles (una vez por página).
+  // Con el resaltador, el lápiz o el recuadro se lee la capa de texto de las páginas visibles (una vez por página).
   useEffect(() => {
     const d = docActual.current;
-    if (pagina === null || !d || (herramienta !== 'resaltador' && herramienta !== 'lapiz')) return;
+    if (pagina === null || !d || (herramienta !== 'resaltador' && herramienta !== 'lapiz' && herramienta !== 'recuadro')) return;
     const cache = textos.current;
     for (const i of visibles()) {
       if (cache.has(i)) continue;
@@ -1217,8 +1223,13 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
     const ctx = c.getContext('2d')!;
     ctx.clearRect(0, 0, c.width, c.height);
     if (!pv) return;
+    const u = { x: ub.x, y: ub.y, escala: ub.escala, dpr: tam.dpr };
+    if (pv.tipo === 'recuadro' && pv.caja) {
+      recuadroEnCurso(ctx, pv.caja, u, pv.renglones, useAjustes.getState().papel === 'noche');
+      return;
+    }
     ctx.globalCompositeOperation = 'multiply';
-    dibujarFrase(ctx, { id: 'previa', ...pv }, { x: ub.x, y: ub.y, escala: ub.escala, dpr: tam.dpr });
+    dibujarFrase(ctx, { id: 'previa', ...pv }, u);
     ctx.globalCompositeOperation = 'source-over';
   }, []);
 
@@ -1738,6 +1749,7 @@ export function Lector({ libroId, paginaPedida, desde }: { libroId: string; pagi
 
       <AvisoModo />
       <AvisoBreve mensaje={mensaje} alCerrar={cerrarMensaje} />
+      {compartirDe && <CompartirFrase f={compartirDe} alCerrar={() => setCompartirDe(null)} />}
       {regreso && !herramienta && (
         <button className={`volver-lugar ${cromo && !enMesa ? 'bajo-cromo' : ''} ${enMesa ? 'en-mesa' : ''}`} onClick={volverAlLugar}>
           <span className="cinta-chica" aria-hidden="true" />

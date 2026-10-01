@@ -2,13 +2,15 @@
 //  - Resaltador: arrastras sobre el texto y se marca por palabras, aunque ocupe varios renglones.
 //    En páginas escaneadas (o fuera del texto) queda una banda a mano y se guarda un recorte.
 //  - Lápiz: dibujas un círculo a mano alrededor de la frase; se guardan las palabras que quedan dentro.
+//  - Recuadro: arrastras de una esquina a la otra, como una captura; se guarda lo que queda dentro
+//    (en páginas escaneadas, el recorte) y en la página quedan cuatro esquinas a lápiz.
 //  - Borrador: tocas una marca y se quita.
 
 import { cajaDe, dibujarFrase, tocaMarca, type Ubicacion } from './dibujo';
-import { nuevoId, type ColorMarca, type Frase, type Herramienta, type Punto } from './modelo';
-import { encerradas, letraEn, seleccionar, type Seleccion, type TextoPagina } from './texto';
+import { nuevoId, type ColorMarca, type Frase, type Herramienta, type Punto, type Rect } from './modelo';
+import { encerradas, enRecuadro, letraEn, seleccionar, type Seleccion, type TextoPagina } from './texto';
 
-export type Previa = Pick<Frase, 'tipo' | 'color' | 'rects' | 'trazo' | 'grosor'> | null;
+export type Previa = (Pick<Frase, 'tipo' | 'color' | 'rects' | 'trazo' | 'grosor' | 'caja'> & { renglones?: number }) | null;
 
 export interface UbicacionPagina {
   x: number;
@@ -33,6 +35,12 @@ export interface OpcionesMarcador {
 }
 
 const GROSOR_BANDA = 15; // px CSS del resaltado a mano
+const RECUADRO_MIN = 18; // px CSS: un recuadro más chico no se guarda (fue un toque)
+
+/** El rectángulo entre dos puntos, en cualquier dirección. */
+export function rectEntre([ax, ay]: Punto, [bx, by]: Punto): Rect {
+  return [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)];
+}
 
 export class Marcador {
   private puntero: number | null = null;
@@ -83,6 +91,13 @@ export class Marcador {
     const h = this.o.herramienta();
     if (h === 'borrador') return this.borrarEn(p);
     if (h === 'lapiz') return this.o.previa({ tipo: 'encerrado', color: this.o.color(), trazo: this.trazo });
+    if (h === 'recuadro') {
+      const caja = rectEntre(this.trazo[0], p);
+      const t = this.o.texto();
+      this.sel = t?.tieneTexto ? enRecuadro(t, caja) : null;
+      const renglones = this.sel ? new Set(this.sel.rects.map((r) => Math.round(r[1]))).size : undefined;
+      return this.o.previa({ tipo: 'recuadro', color: this.o.color(), caja, renglones });
+    }
     if (h === 'resaltador') {
       const t = this.o.texto();
       if (t?.tieneTexto) {
@@ -119,6 +134,13 @@ export class Marcador {
       if (this.tocoTexto && this.sel) frase = { ...base, tipo: 'resaltado', texto: this.sel.texto, rects: this.sel.rects };
       else if (!this.tocoTexto && this.largoCss > 24)
         frase = { ...base, tipo: 'resaltado', texto: '', trazo: simplificar(this.trazo, 1 / u.escala), grosor: GROSOR_BANDA / u.escala };
+    } else if (h === 'recuadro') {
+      const caja = rectEntre(this.trazo[0], this.trazo[this.trazo.length - 1]);
+      if (caja[2] * u.escala >= RECUADRO_MIN && caja[3] * u.escala >= RECUADRO_MIN) {
+        const t = this.o.texto();
+        const sel = t?.tieneTexto ? enRecuadro(t, caja) : null;
+        frase = { ...base, tipo: 'recuadro', texto: sel?.texto ?? '', caja: caja.map(redondear) as Rect };
+      }
     } else if (h === 'lapiz' && this.largoCss > 30) {
       const t = this.o.texto();
       const sel = t?.tieneTexto ? encerradas(t, this.trazo) : null;
@@ -146,10 +168,10 @@ export class Marcador {
   private borrarEn(p: Punto) {
     const u = this.o.ubicacion();
     if (!u) return;
-    const ids = this.o
-      .frasesPagina()
-      .filter((f) => !this.borradas.has(f.id) && tocaMarca(f, p[0], p[1], 12 / u.escala))
-      .map((f) => f.id);
+    const tocadas = this.o.frasesPagina().filter((f) => !this.borradas.has(f.id) && tocaMarca(f, p[0], p[1], 12 / u.escala));
+    // Un recuadro se borra tocando dentro; si ahí hay otra marca, primero se borra esa.
+    const otras = tocadas.filter((f) => f.tipo !== 'recuadro');
+    const ids = (otras.length ? otras : tocadas).map((f) => f.id);
     if (!ids.length) return;
     ids.forEach((i) => this.borradas.add(i));
     this.o.borrar(ids);
@@ -179,7 +201,9 @@ async function recortar(
   const caja = cajaDe(f);
   if (!pagina || !caja) return null;
   const { lienzo, dpr } = pagina;
-  const pad = 12;
+  // El recuadro se recorta justo por su borde y sin dibujarle las esquinas.
+  const recuadro = f.tipo === 'recuadro';
+  const pad = recuadro ? 0 : 12;
   const x0 = Math.max(0, Math.floor((u.x + caja[0] * u.escala - pad) * dpr));
   const y0 = Math.max(0, Math.floor((u.y + caja[1] * u.escala - pad) * dpr));
   const x1 = Math.min(lienzo.width, Math.ceil((u.x + (caja[0] + caja[2]) * u.escala + pad) * dpr));
@@ -191,8 +215,10 @@ async function recortar(
   c.height = Math.round((y1 - y0) * k);
   const ctx = c.getContext('2d')!;
   ctx.drawImage(lienzo, x0, y0, x1 - x0, y1 - y0, 0, 0, c.width, c.height);
-  ctx.globalCompositeOperation = 'multiply';
-  const ub: Ubicacion = { x: u.x - x0 / dpr, y: u.y - y0 / dpr, escala: u.escala, dpr: dpr * k };
-  dibujarFrase(ctx, f, ub);
+  if (!recuadro) {
+    ctx.globalCompositeOperation = 'multiply';
+    const ub: Ubicacion = { x: u.x - x0 / dpr, y: u.y - y0 / dpr, escala: u.escala, dpr: dpr * k };
+    dibujarFrase(ctx, f, ub);
+  }
   return new Promise((ok) => c.toBlob((b) => ok(b), 'image/jpeg', 0.85));
 }

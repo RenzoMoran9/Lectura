@@ -12,7 +12,7 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
 | --- | --- | --- |
 | 0 | Propuesta visual (maqueta e imágenes) | ✅ hecha |
 | 1 | Subir PDF, pasar la hoja con el dedo (curva + sonido), 4 papeles, recordar la página | ✅ hecha |
-| 2 | Menú de la esquina: resaltador, lápiz para encerrar, borrador y «Mis frases» | ✅ hecha |
+| 2 | Menú de la esquina: resaltador, lápiz para encerrar, recuadro, borrador y «Mis frases» | ✅ hecha |
 | 3 | Estante con varios libros, portadas de internet, zoom, doble página en la PC, instalar en el celular, sin internet | ✅ hecha |
 | 4 | Inicio de sesión y sincronización entre celular y PC (Supabase) | ⏳ |
 
@@ -41,10 +41,15 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
 
 - **Menú de la esquina** (`src/ui/MenuEsquina.tsx`): botón chico y semitransparente; se arrastra a cualquier borde
   y recuerda dónde quedó. Se abre en abanico hacia adentro con resaltador (5 colores), lápiz (grafito o rojo),
-  borrador, papel y Mis frases. Con una herramienta activa aparece arriba «Resaltando · la hoja no se pasa · Listo».
+  recuadro, borrador, papel y Mis frases. Con una herramienta activa aparece arriba «Resaltando · la hoja no se pasa · Listo».
 - **Resaltar** (`src/frases/`): se lee la capa de texto de PDF.js y se calcula la caja de cada letra; al arrastrar,
   la selección se ajusta a palabras completas, aunque ocupe varios renglones (y quita el guion de las palabras cortadas).
 - **Encerrar a lápiz**: el círculo se dibuja a mano y queda tal cual; se guardan las palabras que quedaron dentro.
+- **Recuadro** (`enRecuadro` en `src/frases/texto.ts`, `esquinasLapiz` en `src/frases/dibujo.ts`): como una captura;
+  se arrastra de una esquina a la otra (lo de afuera se oscurece y se ve cuántos renglones van dentro). Se guardan las
+  palabras completas que quedaron dentro (a media columna, solo lo de adentro de cada renglón) y en la página quedan
+  cuatro esquinas a lápiz. En escaneados se guarda el recorte justo del recuadro. El borrador lo quita tocando dentro
+  (si ahí hay otra marca, primero esa). Al guardarlo, el aviso trae «Compartir».
 - **Escaneados**: sin texto, el resaltador deja una banda a mano y la frase se guarda como recorte de la página.
 - **Las marcas van en el papel**: se dibujan en una capa blanca que el shader multiplica con la página, así se curvan
   con la hoja, se ven en su reverso y funcionan en los 4 papeles (en «noche» se invierten con la página).
@@ -120,8 +125,9 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   guarda al salir del cuadro o con Enter, y aparece también en el repaso y en el panel de la PC.
 - **Compartir con marco** (`src/frases/tarjeta.ts`, `src/ui/CompartirFrase.tsx`): «Compartir» en cada frase abre una
   hoja con la vista previa y cinco marcos (clásico, antiguo, noche, cuaderno y flor seca). La imagen sale en formato
-  de estado (1080 × 1920), con la marca de la frase (resaltador o lápiz), el libro, el autor y la página; la letra se
-  achica sola si la frase es larga. «Guardar imagen» la baja; «Compartir» usa el menú del sistema (Web Share).
+  de estado (1080 × 1920), solo con el texto bien escrito (sin la marca: junta letras espaciadas y palabras cortadas,
+  quita la capitular suelta y pone «…» si la frase empieza o termina a medias), el libro, el autor y la página; la letra
+  se achica sola si la frase es larga. «Corregir el texto» deja cambiarlo solo para la imagen. «Guardar imagen» la baja; «Compartir» usa el menú del sistema (Web Share).
 - **Exportar** (`src/frases/exportar.ts`): descarga las frases que se ven (con el buscador y los filtros puestos) en
   un archivo `.txt`, agrupadas por libro y por página, con su color y su nota.
 
@@ -153,7 +159,7 @@ La maqueta es `diseno/propuesta-visual.html` (ábrela en el navegador). Para vol
 ## Licencias de terceros
 
 - Fuentes EB Garamond, Fraunces, DM Sans y Caveat (`diseno/fuentes/`, `public/fuentes/`): SIL Open Font License 1.1, vía Fontsource.
-- Íconos de [Lucide](https://lucide.dev) (`diseno/iconos.js`, `src/ui/Icono.tsx`): licencia ISC. El ícono «encerrar» es propio.
+- Íconos de [Lucide](https://lucide.dev) (`diseno/iconos.js`, `src/ui/Icono.tsx`): licencia ISC. El ícono «encerrar» es propio; el del recuadro es «scan-text» de Lucide.
 - Texto de muestra: *Don Quijote de la Mancha*, Miguel de Cervantes (1605), dominio público.
 - [PDF.js](https://github.com/mozilla/pdf.js) (`pdfjs-dist`): Apache-2.0. Sus recursos (mapas de caracteres,
   fuentes estándar, módulos wasm) se publican en `pdfjs/` con sus licencias.

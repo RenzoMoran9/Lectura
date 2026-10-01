@@ -1,6 +1,6 @@
 // Menú discreto de la esquina: un botón chico y semitransparente que se puede arrastrar a cualquier
-// borde. Al tocarlo se abre en abanico hacia el centro con resaltador, lápiz, borrador, papel y
-// Mis frases; el resaltador y el lápiz muestran su paleta.
+// borde. Al tocarlo se abre en abanico hacia el centro con resaltador, lápiz, recuadro, borrador,
+// papel y Mis frases; el resaltador, el lápiz y el recuadro muestran su paleta.
 
 import { useEffect, useRef, useState } from 'react';
 import { useAjustes } from '../estado/ajustes';
@@ -10,18 +10,21 @@ import { Icono, type NombreIcono } from './Icono';
 import { margenesSeguros } from './seguro';
 
 const TAM = 46; // botón cerrado
-const RADIO = 112; // del abanico
+const RADIO = 132; // del abanico (seis botones en un cuarto de círculo, sin pisarse)
 
 type Opcion = { id: Herramienta | 'papel' | 'frases'; icono: NombreIcono; nombre: string };
 const OPCIONES: Opcion[] = [
   { id: 'resaltador', icono: 'highlighter', nombre: 'Resaltador' },
   { id: 'lapiz', icono: 'encerrar', nombre: 'Encerrar con lápiz' },
+  { id: 'recuadro', icono: 'recuadro', nombre: 'Recuadro (como una captura)' },
   { id: 'borrador', icono: 'eraser', nombre: 'Borrador' },
   { id: 'papel', icono: 'file', nombre: 'Papel y sonido' },
   { id: 'frases', icono: 'quote', nombre: 'Mis frases' },
 ];
 
-const ICONO_HERRAMIENTA: Record<Herramienta, NombreIcono> = { resaltador: 'highlighter', lapiz: 'encerrar', borrador: 'eraser' };
+const ICONO_HERRAMIENTA: Record<Herramienta, NombreIcono> = { resaltador: 'highlighter', lapiz: 'encerrar', recuadro: 'recuadro', borrador: 'eraser' };
+/** Las herramientas que usan los colores del lápiz. */
+const conLapiz = (h: Herramienta | null) => h === 'lapiz' || h === 'recuadro';
 
 function useVentana() {
   const [v, setV] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -121,9 +124,9 @@ export function MenuEsquina({
     }
   };
 
-  const paleta = abierto && (herramienta === 'resaltador' || herramienta === 'lapiz');
+  const paleta = abierto && (herramienta === 'resaltador' || conLapiz(herramienta));
   const haciaIzq = derecha;
-  const colorActivo = herramienta === 'lapiz' ? colorLapiz : colorResaltador;
+  const colorActivo = conLapiz(herramienta) ? colorLapiz : colorResaltador;
 
   return (
     <>
@@ -144,7 +147,7 @@ export function MenuEsquina({
                 onClick={() => elegir(o.id)}
               >
                 <Icono nombre={o.icono} tam={22} />
-                {activo && (o.id === 'resaltador' || o.id === 'lapiz') && (
+                {activo && (o.id === 'resaltador' || conLapiz(o.id as Herramienta)) && (
                   <span className="punto-color" style={{ '--c': rgbDe(colorActivo) } as React.CSSProperties} />
                 )}
               </button>
@@ -159,7 +162,7 @@ export function MenuEsquina({
               }}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              <small>{herramienta === 'lapiz' ? 'Lápiz' : 'Resaltador'}</small>
+              <small>{herramienta === 'lapiz' ? 'Lápiz' : herramienta === 'recuadro' ? 'Recuadro' : 'Resaltador'}</small>
               <div>
                 {herramienta === 'resaltador'
                   ? COLORES_RESALTADOR.map((c) => (
@@ -195,7 +198,7 @@ export function MenuEsquina({
       <button
         className={`boton-esquina ${abierto ? 'abierto' : ''} ${herramienta ? 'con-herramienta' : ''} ${arrastre ? 'arrastrando' : ''}`}
         style={{ left: ax - TAM / 2, top: ay - TAM / 2 }}
-        aria-label={abierto ? 'Cerrar menú' : 'Menú: resaltar, encerrar, borrar, papel y Mis frases'}
+        aria-label={abierto ? 'Cerrar menú' : 'Menú: resaltar, encerrar, recuadro, borrar, papel y Mis frases'}
         aria-expanded={abierto}
         onPointerDown={bajar}
         onPointerMove={mover}
@@ -207,7 +210,7 @@ export function MenuEsquina({
         onContextMenu={(e) => e.preventDefault()}
       >
         <Icono nombre={abierto ? 'x' : herramienta ? ICONO_HERRAMIENTA[herramienta] : 'highlighter'} tam={21} />
-        {!abierto && (herramienta === 'resaltador' || herramienta === 'lapiz') && (
+        {!abierto && (herramienta === 'resaltador' || conLapiz(herramienta)) && (
           <span className="punto-color" style={{ '--c': rgbDe(colorActivo) } as React.CSSProperties} />
         )}
       </button>

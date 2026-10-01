@@ -1,7 +1,7 @@
-// Las frases: lo que resalto o encierro en un libro. Cada una guarda el texto, el libro, la página,
+// Las frases: lo que resalto, encierro o capturo con un recuadro en un libro. Cada una guarda el texto, el libro, la página,
 // la fecha, el color y la forma de la marca (en unidades de la página, para dibujarla siempre igual).
 
-export type Herramienta = 'resaltador' | 'lapiz' | 'borrador';
+export type Herramienta = 'resaltador' | 'lapiz' | 'recuadro' | 'borrador';
 export type ColorResaltador = 'amarillo' | 'verde' | 'rosa' | 'celeste' | 'naranja';
 export type ColorLapiz = 'grafito' | 'rojo';
 export type ColorMarca = ColorResaltador | ColorLapiz;
@@ -42,13 +42,14 @@ export interface Frase {
   libroId: string;
   libroTitulo?: string; // por si el libro se quita del estante
   pagina: number; // índice desde 0
-  tipo: 'resaltado' | 'encerrado';
+  tipo: 'resaltado' | 'encerrado' | 'recuadro';
   color: ColorMarca;
   texto: string; // vacío si la página es escaneada
   imagen?: Blob | null; // recorte de la página, para PDFs sin texto
   rects?: Rect[]; // resaltado sobre texto: un rectángulo por renglón
   trazo?: Punto[]; // lápiz, o resaltado a mano en páginas escaneadas
   grosor?: number; // ancho del resaltado a mano, en unidades de la página
+  caja?: Rect; // recuadro: la zona capturada (en la página quedan sus cuatro esquinas a lápiz)
   creada: number;
   /** Una nota corta mía sobre la frase (hasta 280 letras). */
   nota?: string;

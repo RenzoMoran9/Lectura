@@ -235,6 +235,43 @@ export function encerradas(t: TextoPagina, trazo: Punto[]): Seleccion | null {
   return buscar(true) ?? buscar(false);
 }
 
+/**
+ * Palabras dentro de un recuadro (como una captura): entran las letras cuyo centro queda adentro,
+ * completadas hasta la palabra entera. Si el recuadro toma media columna, de cada renglón se
+ * toma solo lo que queda dentro.
+ */
+export function enRecuadro(t: TextoPagina, [x, y, w, h]: Rect): Seleccion | null {
+  const L = t.letras;
+  // Por renglón: la primera y la última letra adentro.
+  const porLinea = new Map<number, [number, number]>();
+  L.forEach((l, k) => {
+    if (!esParteDePalabra(l)) return;
+    const cx = (l.x0 + l.x1) / 2;
+    const cy = (l.top + l.bottom) / 2;
+    if (cx < x || cx > x + w || cy < y || cy > y + h) return;
+    const r = porLinea.get(l.linea);
+    porLinea.set(l.linea, r ? [Math.min(r[0], k), Math.max(r[1], k)] : [k, k]);
+  });
+  if (!porLinea.size) return null;
+  const tramos = [...porLinea.values()]
+    .map(([i, j]) => {
+      while (esParteDePalabra(L[i - 1]) && L[i - 1].linea === L[i].linea) i--;
+      while (esParteDePalabra(L[j + 1]) && L[j + 1].linea === L[j].linea) j++;
+      return [i, j] as const;
+    })
+    .sort((p, q) => p[0] - q[0]);
+  let texto = '';
+  const rects: Rect[] = [];
+  for (const [i, j] of tramos) {
+    const parte = textoEntre(t, i, j);
+    // Palabra cortada con guion al final del renglón anterior: se junta.
+    if (/[-‐­]$/.test(texto) && /^\p{Ll}/u.test(parte)) texto = texto.slice(0, -1) + parte;
+    else texto = texto ? `${texto} ${parte}` : parte;
+    rects.push(...rectangulos(t, i, j));
+  }
+  return { desde: tramos[0][0], hasta: tramos[tramos.length - 1][1], rects, texto };
+}
+
 /** Lee la capa de texto de una página de PDF.js. */
 export async function leerTextoPagina(pagina: {
   getViewport: (o: { scale: number }) => { transform: number[] };

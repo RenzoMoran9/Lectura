@@ -1,4 +1,5 @@
-// Cómo se ven las marcas: resaltador con bordes irregulares de marcador y lápiz con temblor.
+// Cómo se ven las marcas: resaltador con bordes irregulares de marcador, lápiz con temblor y las
+// cuatro esquinas a lápiz del recuadro.
 // Se dibujan en un lienzo blanco con «multiply», que luego se multiplica con la página en WebGL
 // (y también sirven para la vista previa mientras el dedo marca).
 
@@ -118,9 +119,95 @@ function bandaResaltador(ctx: CanvasRenderingContext2D, trazo: Punto[], grosor: 
   ctx.stroke();
 }
 
+/**
+ * Las cuatro esquinas de un recuadro, a lápiz: cada una es una «L» hecha de un solo trazo, que se
+ * pasa un poquito de la esquina, como cuando uno marca un párrafo en el margen.
+ */
+export function esquinasLapiz(ctx: CanvasRenderingContext2D, caja: Rect, hex: string, u: Ubicacion, rnd: () => number) {
+  const [x, y, w, h] = caja;
+  const px = 1 / u.escala; // un píxel CSS, en unidades de la página
+  const brazo = Math.min(24 * px, 0.34 * Math.min(w, h));
+  const esquinas: [number, number, number, number][] = [
+    [x, y, 1, 1],
+    [x + w, y, -1, 1],
+    [x + w, y + h, -1, -1],
+    [x, y + h, 1, -1],
+  ];
+  for (const [ex, ey, sx, sy] of esquinas) {
+    const pasa = (0.6 + rnd() * 1.6) * px;
+    const torcido = (rnd() - 0.5) * 1.2 * px;
+    const pts: Punto[] = [];
+    const n = 4;
+    for (let i = 0; i <= n; i++) pts.push([ex + sx * brazo * (1 - i / n) - (i === n ? sx * pasa : 0), ey + (torcido * (n - i)) / n]);
+    for (let i = 1; i <= n; i++) pts.push([ex + (torcido * i) / n, ey + sy * brazo * (i / n)]);
+    trazoLapiz(ctx, pts, hex, u, rnd);
+  }
+}
+
+/** El recuadro mientras se arrastra: lo de afuera más oscuro, el borde y una asa en cada esquina. */
+export function recuadroEnCurso(ctx: CanvasRenderingContext2D, caja: Rect, u: Ubicacion, renglones: number | undefined, oscuro: boolean) {
+  const [cx, cy, cw, ch] = caja;
+  const x0 = (u.x + cx * u.escala) * u.dpr;
+  const y0 = (u.y + cy * u.escala) * u.dpr;
+  const x1 = (u.x + (cx + cw) * u.escala) * u.dpr;
+  const y1 = (u.y + (cy + ch) * u.escala) * u.dpr;
+  const px = u.dpr;
+  const { width: W, height: H } = ctx.canvas;
+  ctx.save();
+  ctx.fillStyle = oscuro ? 'rgba(0,0,0,.5)' : 'rgba(58,46,34,.34)';
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.rect(x0, y0, x1 - x0, y1 - y0);
+  ctx.fill('evenodd');
+  ctx.strokeStyle = oscuro ? 'rgba(214,204,186,.9)' : '#2A2520';
+  ctx.lineWidth = 1.5 * px;
+  ctx.setLineDash([5 * px, 4 * px]);
+  ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  ctx.setLineDash([]);
+  for (const [ax, ay] of [
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+  ]) {
+    ctx.beginPath();
+    ctx.arc(ax, ay, 5 * px, 0, Math.PI * 2);
+    ctx.fillStyle = oscuro ? '#23201C' : '#FBF7EF';
+    ctx.fill();
+    ctx.lineWidth = 2 * px;
+    ctx.stroke();
+  }
+  if (renglones) {
+    // Cuántos renglones van quedando dentro, sobre la esquina de arriba.
+    const texto = renglones === 1 ? '1 renglón' : `${renglones} renglones`;
+    ctx.font = `600 ${11.5 * px}px "DM Sans", sans-serif`;
+    const tw = ctx.measureText(texto).width;
+    const bw = tw + 18 * px;
+    const bh = 22 * px;
+    const bx = Math.max(4 * px, Math.min(W - bw - 4 * px, x0));
+    const by = y0 - bh - 8 * px >= 2 * px ? y0 - bh - 8 * px : y1 + 8 * px;
+    ctx.fillStyle = oscuro ? '#D6CCBA' : '#2A2520';
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 10 * px);
+    ctx.fill();
+    ctx.fillStyle = oscuro ? '#23201C' : '#F5EDDB';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(texto, bx + 9 * px, by + bh / 2 + 0.5 * px);
+  }
+  ctx.restore();
+}
+
 /** Dibuja una frase (sobre un lienzo que ya tiene «multiply» y fondo blanco). */
-export function dibujarFrase(ctx: CanvasRenderingContext2D, f: Pick<Frase, 'id' | 'color' | 'rects' | 'trazo' | 'grosor' | 'tipo'>, u: Ubicacion) {
+export function dibujarFrase(
+  ctx: CanvasRenderingContext2D,
+  f: Pick<Frase, 'id' | 'color' | 'rects' | 'trazo' | 'grosor' | 'tipo' | 'caja'>,
+  u: Ubicacion,
+) {
   const rnd = azar(f.id);
+  if (f.tipo === 'recuadro') {
+    if (f.caja) esquinasLapiz(ctx, f.caja, esLapiz(f.color) ? LAPICES[f.color].hex : LAPICES.grafito.hex, u, rnd);
+    return;
+  }
   if (f.tipo === 'encerrado' || esLapiz(f.color)) {
     const hex = esLapiz(f.color) ? LAPICES[f.color].hex : LAPICES.grafito.hex;
     if (f.trazo) trazoLapiz(ctx, f.trazo, hex, u, rnd);
@@ -149,7 +236,8 @@ export function lienzoDeMarcas(ancho: number, alto: number, frases: Frase[], u: 
 }
 
 /** Caja (en unidades de la página) que ocupa una marca. */
-export function cajaDe(f: Pick<Frase, 'rects' | 'trazo' | 'grosor'>): Rect | null {
+export function cajaDe(f: Pick<Frase, 'rects' | 'trazo' | 'grosor' | 'caja'>): Rect | null {
+  if (f.caja) return f.caja;
   const xs: number[] = [];
   const ys: number[] = [];
   f.rects?.forEach(([x, y, w, h]) => {
@@ -169,6 +257,11 @@ export function cajaDe(f: Pick<Frase, 'rects' | 'trazo' | 'grosor'>): Rect | nul
 
 /** ¿Toca el punto (u, v) esta marca? Para el borrador. */
 export function tocaMarca(f: Frase, u: number, v: number, tolerancia: number): boolean {
+  if (f.caja) {
+    // Un recuadro se borra tocando dentro de él.
+    const [x, y, w, h] = f.caja;
+    return u >= x - tolerancia && u <= x + w + tolerancia && v >= y - tolerancia && v <= y + h + tolerancia;
+  }
   if (f.rects?.some(([x, y, w, h]) => u >= x - tolerancia && u <= x + w + tolerancia && v >= y - tolerancia && v <= y + h + tolerancia)) return true;
   const t = f.trazo;
   if (!t) return false;

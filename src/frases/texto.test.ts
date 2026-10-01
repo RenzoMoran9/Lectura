@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { simplificar } from './marcador';
 import { tocaMarca } from './dibujo';
 import type { Frase } from './modelo';
-import { construirTexto, dentro, encerradas, letraEn, seleccionar, textoEntre, type TrozoTexto } from './texto';
+import { construirTexto, dentro, encerradas, enRecuadro, letraEn, seleccionar, textoEntre, type TrozoTexto } from './texto';
 
 // Página de prueba: dos renglones de 12 pt con letras de 6 pt de ancho (fuente «monoespaciada»).
 // Transformación de la vista a escala 1 de una página de 400 × 600: y hacia abajo.
@@ -105,5 +105,22 @@ describe('marcas', () => {
     expect(s.length).toBeLessThan(10);
     expect(s[0]).toEqual([0, 0]);
     expect(s[s.length - 1][0]).toBeCloseTo(4.9);
+  });
+});
+
+describe('recuadro (como una captura)', () => {
+  it('toma todo lo que queda dentro, en orden, y junta la palabra cortada con guion', () => {
+    expect(enRecuadro(pagina, [40, 85, 320, 50])?.texto).toBe('En un lugar de la Mancha, de cuyo nombre no quiero acordarme.');
+    expect(enRecuadro(pagina, [40, 85, 320, 33])?.texto).toBe('En un lugar de la Mancha, de cuyo nombre no');
+  });
+
+  it('completa las palabras que el borde corta y, a media columna, toma solo lo de adentro', () => {
+    const sel = enRecuadro(pagina, [90, 90, 70, 28])!;
+    expect(sel.texto).toBe('lugar de la cuyo nombre');
+    expect(sel.rects).toHaveLength(2);
+  });
+
+  it('sin letras adentro no hay frase', () => {
+    expect(enRecuadro(pagina, [300, 300, 50, 50])).toBeNull();
   });
 });

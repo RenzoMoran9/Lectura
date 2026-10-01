@@ -41,6 +41,9 @@ const TRAZOS = {
   reloj: '<circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />',
   lista: '<path d="M3 5h.01" /><path d="M3 12h.01" /><path d="M3 19h.01" /><path d="M8 5h13" /><path d="M8 12h13" /><path d="M8 19h13" />',
   // Propio (de la propuesta visual): un óvalo a lápiz alrededor de dos renglones.
+  // Lucide «scan-text».
+  recuadro:
+    '<path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" /><path d="M21 17v2a2 2 0 0 1-2 2h-2" /><path d="M7 21H5a2 2 0 0 1-2-2v-2" /><path d="M7 8h8" /><path d="M7 12h10" /><path d="M7 16h6" />',
   encerrar: '<path d="M6.2 18.6C3.7 17.4 2 15.2 2 12.6 2 8.6 6.5 5.5 12 5.5s10 3.1 10 7.1-4.5 7.1-10 7.1c-1.4 0-2.8-.2-4-.6" /><path d="M7.5 11h9" /><path d="M7.5 14.4h5.5" />',
 } as const;
 
