@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#F4EEE2" />
+    <meta name="description" content="Entre Hojas: un lector de libros en PDF que se siente como un libro de papel." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Entre Hojas" />
+    <link rel="icon" type="image/svg+xml" href="./icono.svg" />
+    <link rel="apple-touch-icon" href="./iconos/apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <title>Entre Hojas</title>
+    <script>
+      // El tema de la app, antes de dibujar nada (así no parpadea al abrir).
+      try {
+        var tema = (JSON.parse(localStorage.getItem('entre-hojas:ajustes') || '{}').state || {}).tema;
+        var barra = { salvia: '#ECF0E8', penumbra: '#1B1815' }[tema];
+        if (barra) {
+          document.documentElement.dataset.tema = tema;
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', barra);
+        }
+      } catch (e) {}
+    </script>
+    <script type="module" crossorigin src="/Lectura/assets/index-BMkbQRQU.js"></script>
+    <link rel="stylesheet" crossorigin href="/Lectura/assets/index-CZsOzwF-.css">
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>

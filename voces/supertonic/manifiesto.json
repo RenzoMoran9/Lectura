@@ -1,0 +1,13 @@
+{
+ "paquete": "sherpa-onnx-supertonic-3-tts-int8-2026-05-11",
+ "archivos": {
+  "duration_predictor.int8.onnx": 3700147,
+  "text_encoder.int8.onnx": 36416150,
+  "vector_estimator.int8.onnx": 78400833,
+  "vocoder.int8.onnx": 25991073,
+  "tts.json": 8253,
+  "unicode_indexer.bin": 262144,
+  "voice.bin": 517168
+ },
+ "total": 145295768
+}
