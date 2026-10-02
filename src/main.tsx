@@ -6,6 +6,7 @@ import { instalarTexturasCss } from './hoja/papel';
 import { iniciarPwa } from './pwa/pwa';
 import { ambiente } from './sonido/ambiente';
 import { sonido } from './sonido/sonido';
+import { aplicarTema } from './ui/temas';
 import './estilos.css';
 
 instalarTexturasCss();
@@ -21,6 +22,10 @@ const aplicarSonido = () => {
 };
 aplicarSonido();
 useAjustes.subscribe(aplicarSonido);
+
+// El tema de la app (también se pone antes, en index.html, para que no parpadee al abrir).
+aplicarTema(useAjustes.getState().tema);
+useAjustes.subscribe((a, b) => a.tema !== b.tema && aplicarTema(a.tema));
 
 // Las letras de la app se usan también dentro de la hoja (título y número de página).
 void Promise.all(['600 12px Fraunces', '400 12px Fraunces'].map((f) => document.fonts.load(f))).catch(() => {});

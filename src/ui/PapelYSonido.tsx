@@ -1,4 +1,4 @@
-// Hoja inferior «Papel y sonido»: los cuatro papeles, el sonido de la hoja (volumen y tipo) y el
+// Hoja inferior «Papel y sonido»: los cuatro papeles, el tema de la app, el sonido de la hoja (volumen y tipo) y el
 // sonido de fondo de este libro (para relajarse o según su género), con su propio volumen.
 
 import { useAjustes } from '../estado/ajustes';
@@ -7,6 +7,7 @@ import { PAPELES, TIPOS_PAPEL } from '../hoja/papel';
 import { luzActual } from '../lectura/luz';
 import { AMBIENTES, type TipoAmbiente } from '../sonido/ambiente';
 import { sonido } from '../sonido/sonido';
+import { ElegirTema } from './ElegirTema';
 import { Icono, type NombreIcono } from './Icono';
 
 function Ambiente({ id, nombre, icono, on, alElegir }: { id: string; nombre: string; icono: NombreIcono; on: boolean; alElegir: () => void }) {
@@ -52,6 +53,9 @@ export function PapelYSonido({ libroId, alCerrar }: { libroId: string; alCerrar:
             </button>
           ))}
         </div>
+        <div className="sep" />
+        <div className="eti-sec">Tema de la app</div>
+        <ElegirTema />
         <div className="sep" />
         <div className="eti-sec">Luz del papel</div>
         <label className="fila-aj">

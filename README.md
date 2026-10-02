@@ -106,6 +106,9 @@ La visión completa, el diseño y las decisiones técnicas están en [`CLAUDE.md
   Cada página se reparte en varias hojas que se pasan con el dedo y su sonido; se recuerda en cuál vas. Las marcas se
   vuelven a dibujar alrededor de sus palabras; para marcar, la página vuelve un momento a la original. De lado y en la
   PC, siempre la original. Los PDF a dos columnas todavía se ven mejor en «Original».
+- **Temas de la app** (`src/ui/temas.ts`, `src/ui/ElegirTema.tsx`; botón de paleta en el estante y en «Papel y
+  sonido»): Papel (el de siempre), Salvia (claro y sereno, verde grisáceo) y Penumbra (oscuro y tibio, para la noche).
+  Cambian los colores de la interfaz, que en `src/estilos.css` son variables; la hoja conserva su papel.
 - **Cuánto falta**: la app mide tu ritmo (segundos por página, sin contar saltos ni pausas largas) y dice cuánto te
   falta para terminar el capítulo y el libro; las rayitas de la barra de abajo son los capítulos.
 - **Pantalla encendida** mientras lees (Wake Lock); si nadie la toca en 10 minutos, se deja apagar.

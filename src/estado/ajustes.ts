@@ -7,6 +7,9 @@ import type { Marco } from '../frases/tarjeta';
 import type { TipoPapel } from '../hoja/papel';
 import type { JuegoSonido } from '../sonido/sonido';
 
+/** Tema de la app: Papel (cálido, el de siempre), Salvia (claro y sereno) o Penumbra (oscuro). */
+export type Tema = 'papel' | 'salvia' | 'penumbra';
+
 export interface Ajustes {
   papel: TipoPapel;
   sonido: boolean;
@@ -43,6 +46,7 @@ export interface Ajustes {
   vistaMedida: boolean;
   /** Alto del renglón en «A tu medida» (px). */
   letraMedida: number;
+  tema: Tema;
   poner: (cambios: Partial<Omit<Ajustes, 'poner'>>) => void;
 }
 
@@ -67,6 +71,7 @@ export const useAjustes = create<Ajustes>()(
       sinAvisoInstalar: false,
       vistaMedida: false,
       letraMedida: 20,
+      tema: 'papel',
       poner: (cambios) => set(cambios),
     }),
     { name: 'entre-hojas:ajustes', version: 1 },

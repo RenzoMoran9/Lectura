@@ -13,6 +13,7 @@ import { usePwa } from '../pwa/pwa';
 import { sonido } from '../sonido/sonido';
 import { FichaLibro } from './FichaLibro';
 import { miles, tamanoLegible } from './formato';
+import { HojaTema } from './ElegirTema';
 import { Icono } from './Icono';
 import { TextoFrase } from './MisFrases';
 import { Pestanas } from './Pestanas';
@@ -71,6 +72,7 @@ export function Inicio() {
   const entrada = useRef<HTMLInputElement>(null);
   const [ficha, setFicha] = useState<string | null>(null);
   const [buscando, setBuscando] = useState(false);
+  const [eligiendoTema, setEligiendoTema] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [cargandoMuestra, setCargandoMuestra] = useState(false);
 
@@ -127,19 +129,25 @@ export function Inicio() {
         <div className="saludo">{saludo()}</div>
         <div className="titulo-fila">
           <h1 className="titulo-app">Mi estante</h1>
-          {libros.length > 0 && (
-            <button
-              className={`icono-btn ${buscando ? 'on' : ''}`}
-              onClick={() => {
-                setBuscando((b) => !b);
-                setBusqueda('');
-              }}
-              aria-label={buscando ? 'Cerrar búsqueda' : 'Buscar en el estante'}
-            >
-              <Icono nombre={buscando ? 'x' : 'search'} tam={19} />
+          <div className="titulo-botones">
+            <button className="icono-btn" onClick={() => setEligiendoTema(true)} aria-label="Tema de la app">
+              <Icono nombre="paleta" tam={19} />
             </button>
-          )}
+            {libros.length > 0 && (
+              <button
+                className={`icono-btn ${buscando ? 'on' : ''}`}
+                onClick={() => {
+                  setBuscando((b) => !b);
+                  setBusqueda('');
+                }}
+                aria-label={buscando ? 'Cerrar búsqueda' : 'Buscar en el estante'}
+              >
+                <Icono nombre={buscando ? 'x' : 'search'} tam={19} />
+              </button>
+            )}
+          </div>
         </div>
+        {eligiendoTema && <HojaTema alCerrar={() => setEligiendoTema(false)} />}
 
         {buscando && (
           <label className="buscar buscar-estante">

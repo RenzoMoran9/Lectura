@@ -13,6 +13,17 @@
     <link rel="apple-touch-icon" href="./iconos/apple-touch-icon.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <title>Entre Hojas</title>
+    <script>
+      // El tema de la app, antes de dibujar nada (así no parpadea al abrir).
+      try {
+        var tema = (JSON.parse(localStorage.getItem('entre-hojas:ajustes') || '{}').state || {}).tema;
+        var barra = { salvia: '#ECF0E8', penumbra: '#1B1815' }[tema];
+        if (barra) {
+          document.documentElement.dataset.tema = tema;
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', barra);
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="app"></div>

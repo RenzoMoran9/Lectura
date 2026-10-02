@@ -90,6 +90,13 @@ Pantallas:
 - **Tinta:** `#2A2520`; tinta suave `#6A6056`; tinta tenue `#9A8F82`.
 - **Acento («cinta marcapáginas»):** `#8E2F2A`.
 - **Fondo de la interfaz:** `#F4EEE2`; tarjetas `#FBF7EF`.
+- **Temas de la app** (botón de paleta en el estante y en «Papel y sonido»). Solo cambian la interfaz (estante, menús, barras); la hoja tiene sus papeles. Los colores están como variables en `src/estilos.css`.
+
+  | Tema | Fondo | Tarjetas | Tinta | Acento | Para quién |
+  | --- | --- | --- | --- | --- | --- |
+  | Papel (el de siempre) | `#F4EEE2` | `#FBF7EF` | `#2A2520` | `#8E2F2A` | cálido, como un libro |
+  | Salvia | `#ECF0E8` | `#F7F9F4` | `#1F2B25` | `#3D7358` | claro y sereno, sin el tono cálido |
+  | Penumbra | `#1B1815` | `#24201C` | `#ECE3D3` | `#D9826A` | oscuro y tibio, para leer de noche |
 - **Papeles:**
 
   | Papel | Color | Detalles |
